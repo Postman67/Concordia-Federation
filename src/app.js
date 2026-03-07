@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const path       = require('path');
 const express    = require('express');
 const cors       = require('cors');
 const pool       = require('./config/db');
@@ -7,6 +8,7 @@ const authRoutes     = require('./routes/auth');
 const userRoutes     = require('./routes/user');
 const settingsRoutes = require('./routes/settings');
 const serversRoutes  = require('./routes/servers');
+const adminRoutes    = require('./routes/admin');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -16,12 +18,17 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// ─── Dashboard (static) ───────────────────────────────────────────────────────
+
+app.use('/dashboard', express.static(path.join(__dirname, '../public/dashboard')));
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.use('/api/auth',     authRoutes);
 app.use('/api/user',     userRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/servers',  serversRoutes);
+app.use('/api/admin',    adminRoutes);
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));

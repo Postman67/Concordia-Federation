@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Concordia Federation — Admin</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="login-page">
+
+  <!-- ── Login View ─────────────────────────────────────────────────── -->
+  <div id="login-view" class="login-container">
+    <div class="login-card">
+      <div class="login-logo">
+        <span class="logo-icon">⚙</span>
+        <h1>Federation Admin</h1>
+      </div>
+      <p class="login-subtitle">Sign in with your Concordia credentials</p>
+
+      <form id="login-form" novalidate>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="admin@concordiachat.com" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" required />
+        </div>
+        <p id="login-error" class="field-error hidden"></p>
+        <button type="submit" id="login-btn">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Dashboard View ─────────────────────────────────────────────── -->
+  <div id="dashboard-view" class="hidden">
+
+    <!-- Sidebar -->
+    <nav id="sidebar">
+      <div class="sidebar-header">
+        <span class="logo-icon">⚙</span>
+        <span class="sidebar-title">Federation</span>
+      </div>
+
+      <ul class="nav-list">
+        <li><a href="#" class="nav-link active" data-section="users">Users</a></li>
+        <li><a href="#" class="nav-link" data-section="stats">Stats</a></li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <span id="admin-username" class="admin-name"></span>
+        <button id="logout-btn" class="btn-ghost">Sign Out</button>
+      </div>
+    </nav>
+
+    <!-- Main content -->
+    <main id="main-content">
+
+      <!-- ── Users Section ─────────────────────────────────────── -->
+      <section id="section-users" class="section active">
+        <div class="section-header">
+          <h2>Users</h2>
+          <div class="search-bar">
+            <input id="user-search" type="text" placeholder="Search by username or email…" />
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table id="users-table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Display Name</th>
+                <th>Theme</th>
+                <th>Servers</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr id="users-loading-row"><td colspan="7" class="loading-cell">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Stats Section ─────────────────────────────────────── -->
+      <section id="section-stats" class="section hidden">
+        <div class="section-header"><h2>Federation Stats</h2></div>
+        <div id="stats-grid" class="stats-grid">
+          <div class="stat-card"><div id="stat-users" class="stat-value">—</div><div class="stat-label">Total Users</div></div>
+          <div class="stat-card"><div id="stat-servers" class="stat-value">—</div><div class="stat-label">Unique Servers</div></div>
+          <div class="stat-card"><div id="stat-entries" class="stat-value">—</div><div class="stat-label">Server Entries</div></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ── Edit User Modal ───────────────────────────────────────────── -->
+  <div id="modal-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">Edit User</h3>
+        <button id="modal-close" class="btn-icon" aria-label="Close">✕</button>
+      </div>
+
+      <form id="edit-form" novalidate>
+        <input type="hidden" id="edit-user-id" />
+
+        <div class="modal-grid">
+          <div class="field">
+            <label for="edit-username">Username</label>
+            <input id="edit-username" type="text" minlength="3" maxlength="50" />
+          </div>
+          <div class="field">
+            <label for="edit-email">Email</label>
+            <input id="edit-email" type="email" />
+          </div>
+          <div class="field">
+            <label for="edit-display-name">Display Name</label>
+            <input id="edit-display-name" type="text" maxlength="100" />
+          </div>
+          <div class="field">
+            <label for="edit-avatar-url">Avatar URL</label>
+            <input id="edit-avatar-url" type="url" placeholder="https://…" />
+          </div>
+          <div class="field">
+            <label for="edit-theme">Theme</label>
+            <select id="edit-theme">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+          </div>
+        </div>
+
+        <p id="edit-error" class="field-error hidden"></p>
+
+        <div class="modal-actions">
+          <button type="button" id="delete-user-btn" class="btn-danger">Delete User</button>
+          <div class="modal-actions-right">
+            <button type="button" id="cancel-btn" class="btn-ghost">Cancel</button>
+            <button type="submit" id="save-btn">Save Changes</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Confirm Delete Modal ──────────────────────────────────────── -->
+  <div id="confirm-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h3>Confirm Delete</h3>
+      </div>
+      <p id="confirm-message" class="confirm-message"></p>
+      <div class="modal-actions">
+        <div class="modal-actions-right">
+          <button id="confirm-cancel" class="btn-ghost">Cancel</button>
+          <button id="confirm-ok" class="btn-danger">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

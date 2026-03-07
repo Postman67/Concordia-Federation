@@ -1,6 +1,6 @@
 # Concordia Federation — API Reference
 
-> Last updated: March 7, 2026 2:48 PM PST
+> Last updated: March 7, 2026 3:56 PM PST
 
 > The Federation is the sole authentication and settings authority for all Concordia clients.
 > Individual servers never receive personal user data — only the user's `id`.
@@ -227,6 +227,117 @@ Removes a server from the user's list.
 **`204 No Content`** — deleted successfully.
 
 **`401`** Missing/invalid token · **`404`** Not found · **`500`** Server error
+
+---
+
+## Admin — `/api/admin` 🔒🛡
+
+All admin endpoints require a JWT whose `sub` claim matches the `ADMIN_UUID` environment variable.
+Obtain a token by logging in as the admin account via `POST /api/auth/login`.
+
+Admin requests return `403 Forbidden` if the token is valid but does not belong to the admin UUID.
+
+---
+
+### `GET /api/admin/stats`
+
+Returns federation-wide aggregate counts.
+
+**`200 OK`**
+```json
+{
+  "stats": {
+    "total_users": "42",
+    "total_server_entries": "137",
+    "unique_servers": "25"
+  }
+}
+```
+
+---
+
+### `GET /api/admin/users`
+
+Returns all users with their settings and server count.
+
+**`200 OK`**
+```json
+{
+  "users": [
+    {
+      "id": "a3f8c21d-...",
+      "username": "petersmith",
+      "email": "peter@example.com",
+      "display_name": "Peter",
+      "avatar_url": "https://example.com/avatar.png",
+      "theme": "dark",
+      "server_count": "3",
+      "created_at": "..."
+    }
+  ]
+}
+```
+
+---
+
+### `GET /api/admin/users/:id`
+
+Returns full detail for a single user including their server list.
+
+**`200 OK`**
+```json
+{
+  "user": { "id": "...", "username": "petersmith", "email": "...", "display_name": "Peter", "avatar_url": "...", "theme": "dark", "created_at": "...", "updated_at": "..." },
+  "servers": [ { "id": "...", "server_address": "...", "server_name": "...", "position": 0, "added_at": "..." } ]
+}
+```
+
+**`404`** User not found
+
+---
+
+### `PATCH /api/admin/users/:id`
+
+Modifies a user's account fields or settings. Only sent fields are updated.
+
+**Request body** — all fields optional
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `username` | string | 3–50 chars. |
+| `email` | string | Valid email. |
+| `display_name` | string | Max 100 chars. |
+| `avatar_url` | string | Valid URL. |
+| `theme` | string | `"dark"` or `"light"`. |
+
+**`200 OK`** Returns updated user object.
+
+**`400`** Validation failed · **`404`** User not found · **`409`** Username/email conflict · **`500`** Server error
+
+> Password resets are not exposed via the admin API. Use a direct DB update for emergency resets.
+
+---
+
+### `DELETE /api/admin/users/:id`
+
+Permanently deletes a user and all associated settings and servers (cascade).
+
+> The master admin UUID (`ADMIN_UUID`) cannot be deleted.
+
+**`204 No Content`** — deleted successfully.
+
+**`400`** Attempt to delete admin account · **`404`** User not found · **`500`** Server error
+
+---
+
+## Dashboard
+
+The admin dashboard is served as a static single-page app at `/dashboard`.
+
+- **URL:** `https://federation.concordiachat.com/dashboard`
+- Log in with the admin Concordia account credentials.
+- The dashboard communicates with the `/api/admin/*` endpoints using the JWT stored in `localStorage`.
+- Token expiry is enforced on every page load — expired sessions redirect to the login screen automatically.
 
 ---
 

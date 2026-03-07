@@ -1,8 +1,19 @@
 # Concordia Federation — API Reference
 
-Base URL: `http://localhost:3000` (configure `PORT` in `.env`)
+> The Federation is the sole authentication and settings authority for all Concordia clients.
+> Individual servers never receive personal user data — only the user's `id`.
 
-All request and response bodies are JSON. Successful responses include a `Content-Type: application/json` header.
+Base URL: `https://federation.concordiachat.com` (local: `http://localhost:3000`)
+
+All request and response bodies are JSON.
+
+### Authentication
+
+All protected endpoints require a JWT in the `Authorization` header:
+```
+Authorization: Bearer <token>
+```
+Tokens are issued by `/api/auth/register` and `/api/auth/login`. They expire after the duration set in `JWT_EXPIRES_IN` (default `7d`).
 
 ---
 
@@ -10,148 +21,214 @@ All request and response bodies are JSON. Successful responses include a `Conten
 
 ### `GET /health`
 
-Confirms the server is running.
-
-**Response `200 OK`**
+**Response `200`**
 ```json
 { "status": "ok" }
 ```
 
 ---
 
-## Auth
-
-All auth endpoints are prefixed with `/api/auth`.
-
----
+## Auth — `/api/auth`
 
 ### `POST /api/auth/register`
 
-Creates a new user account. Returns a signed JWT on success.
+Creates a new Federation account. Returns a JWT.
 
-#### Request body
+**Request body**
 
-| Field      | Type   | Required | Rules |
-|------------|--------|----------|-------|
-| `username` | string | Yes | 3–50 characters. Letters, numbers, `_`, and `-` only. |
-| `email`    | string | Yes | Must be a valid email address. |
-| `password` | string | Yes | Minimum 8 characters, at least one uppercase letter and one number. |
+| Field | Type | Rules |
+|-------|------|-------|
+| `username` | string | 3–50 chars. Letters, numbers, `_`, `-` only. |
+| `email` | string | Valid email address. |
+| `password` | string | Min 8 chars, one uppercase letter, one number. |
 
 ```json
-{
-  "username": "petersmith",
-  "email": "peter@example.com",
-  "password": "Secret123"
-}
+{ "username": "petersmith", "email": "peter@example.com", "password": "Secret123" }
 ```
 
-#### Responses
-
-**`201 Created`** — account created successfully.
+**`201 Created`**
 ```json
 {
   "message": "Account created successfully.",
   "token": "<jwt>",
-  "user": {
-    "id": 1,
-    "username": "petersmith",
-    "email": "peter@example.com",
-    "created_at": "2026-02-26T12:00:00.000Z"
-  }
+  "user": { "id": 1, "username": "petersmith", "email": "peter@example.com", "created_at": "..." }
 }
 ```
 
-**`400 Bad Request`** — one or more fields failed validation.
-```json
-{
-  "errors": [
-    { "field": "password", "message": "Password must be at least 8 characters long." },
-    { "field": "email",    "message": "A valid email address is required." }
-  ]
-}
-```
-
-**`409 Conflict`** — username or email is already registered.
-```json
-{ "error": "That email is already in use." }
-```
-
-**`500 Internal Server Error`**
-```json
-{ "error": "Internal server error." }
-```
+**`400`** Validation failed · **`409`** Username or email already taken · **`500`** Server error
 
 ---
 
 ### `POST /api/auth/login`
 
-Authenticates an existing user. Returns a signed JWT on success.
+Authenticates an existing user. Returns a JWT.
 
-#### Request body
+**Request body**
 
-| Field      | Type   | Required |
-|------------|--------|----------|
-| `email`    | string | Yes |
-| `password` | string | Yes |
+| Field | Type |
+|-------|------|
+| `email` | string |
+| `password` | string |
 
-```json
-{
-  "email": "peter@example.com",
-  "password": "Secret123"
-}
-```
-
-#### Responses
-
-**`200 OK`** — login successful.
+**`200 OK`**
 ```json
 {
   "message": "Login successful.",
   "token": "<jwt>",
+  "user": { "id": 1, "username": "petersmith", "email": "peter@example.com" }
+}
+```
+
+**`400`** Validation failed · **`401`** Invalid credentials · **`500`** Server error
+
+> The same `401` message is returned for both unknown email and wrong password to prevent user enumeration.
+
+---
+
+## User — `/api/user` 🔒
+
+### `GET /api/user/me`
+
+Returns the authenticated user's profile joined with their current settings.
+
+**`200 OK`**
+```json
+{
   "user": {
     "id": 1,
     "username": "petersmith",
-    "email": "peter@example.com"
+    "email": "peter@example.com",
+    "created_at": "...",
+    "display_name": "Peter",
+    "avatar_url": "https://example.com/avatar.png",
+    "theme": "dark"
   }
 }
 ```
 
-**`400 Bad Request`** — missing or malformed fields.
+**`401`** Missing/invalid token · **`404`** User not found · **`500`** Server error
+
+---
+
+## Settings — `/api/settings` 🔒
+
+Globally synced across every client the user is logged into.
+
+### `GET /api/settings`
+
+Returns the authenticated user's settings.
+
+**`200 OK`**
 ```json
 {
-  "errors": [
-    { "field": "email", "message": "A valid email address is required." }
+  "settings": {
+    "display_name": "Peter",
+    "avatar_url": "https://example.com/avatar.png",
+    "theme": "dark",
+    "updated_at": "..."
+  }
+}
+```
+
+---
+
+### `PUT /api/settings`
+
+Updates one or more settings fields. Only sent fields are changed (others are left as-is).
+
+**Request body** — all fields optional
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `display_name` | string | Max 100 chars. |
+| `avatar_url` | string | Must be a valid URL. |
+| `theme` | string | `"dark"` or `"light"`. |
+
+```json
+{ "display_name": "Peter", "theme": "light" }
+```
+
+**`200 OK`** Returns updated settings object.
+
+**`400`** Validation failed · **`401`** Missing/invalid token · **`500`** Server error
+
+---
+
+## Servers — `/api/servers` 🔒
+
+The user's personal server list, stored in the Federation.
+Clients use this to populate the left-hand sidebar. No personal user data is ever sent to servers.
+
+### `GET /api/servers`
+
+Returns the authenticated user's full server list, ordered by `position`.
+
+**`200 OK`**
+```json
+{
+  "servers": [
+    { "id": 1, "server_address": "192.168.1.10:8080", "nickname": "My Home Server", "position": 0, "added_at": "..." },
+    { "id": 2, "server_address": "play.concordia.gg:8080", "nickname": null, "position": 1, "added_at": "..." }
   ]
 }
 ```
 
-**`401 Unauthorized`** — email not found or password incorrect.
+---
+
+### `POST /api/servers`
+
+Adds a server to the user's list.
+
+**Request body**
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `server_address` | string | Required. IP or domain:port. Max 255 chars. |
+| `nickname` | string | Optional. Max 100 chars. |
+
 ```json
-{ "error": "Invalid email or password." }
+{ "server_address": "192.168.1.10:8080", "nickname": "My Home Server" }
 ```
 
-> Note: the same message is returned for both an unrecognised email and a wrong password to prevent user enumeration.
-
-**`500 Internal Server Error`**
+**`201 Created`**
 ```json
-{ "error": "Internal server error." }
+{
+  "server": { "id": 1, "server_address": "192.168.1.10:8080", "nickname": "My Home Server", "position": 0, "added_at": "..." }
+}
 ```
+
+**`400`** Validation failed · **`401`** Missing/invalid token · **`409`** Server already in list · **`500`** Server error
 
 ---
 
-## Authentication
+### `PATCH /api/servers/:id`
 
-Protected routes (to be added) expect a JWT in the `Authorization` header:
+Updates the `nickname` or `position` of an entry. Only sent fields are changed.
 
-```
-Authorization: Bearer <token>
-```
+**Request body** — all fields optional
 
-Tokens expire after the duration set in `JWT_EXPIRES_IN` (default `7d`). When a token expires the client should redirect the user to login again.
+| Field | Type | Rules |
+|-------|------|-------|
+| `nickname` | string | Max 100 chars. |
+| `position` | integer | Non-negative integer. |
+
+**`200 OK`** Returns updated server object.
+
+**`400`** Validation failed · **`401`** Missing/invalid token · **`404`** Not found · **`500`** Server error
 
 ---
 
-## Database schema
+### `DELETE /api/servers/:id`
+
+Removes a server from the user's list.
+
+**`204 No Content`** — deleted successfully.
+
+**`401`** Missing/invalid token · **`404`** Not found · **`500`** Server error
+
+---
+
+## Database Schema
 
 ```
 users
@@ -160,5 +237,21 @@ users
 ├── email          VARCHAR(255) UNIQUE NOT NULL
 ├── password_hash  VARCHAR(255) NOT NULL          ← bcrypt hash, never plaintext
 ├── created_at     TIMESTAMPTZ  DEFAULT NOW()
-└── updated_at     TIMESTAMPTZ  DEFAULT NOW()     ← auto-updated via trigger
+└── updated_at     TIMESTAMPTZ  DEFAULT NOW()
+
+user_settings                                     ← one row per user, globally synced
+├── user_id        INTEGER PRIMARY KEY → users.id
+├── display_name   VARCHAR(100)
+├── avatar_url     VARCHAR(500)
+├── theme          VARCHAR(20)  DEFAULT 'dark'
+└── updated_at     TIMESTAMPTZ  DEFAULT NOW()
+
+user_servers                                      ← server list, no user PII sent to servers
+├── id             SERIAL PRIMARY KEY
+├── user_id        INTEGER → users.id
+├── server_address VARCHAR(255) NOT NULL
+├── nickname       VARCHAR(100)
+├── position       INTEGER DEFAULT 0
+└── added_at       TIMESTAMPTZ  DEFAULT NOW()
 ```
+

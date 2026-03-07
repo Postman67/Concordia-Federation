@@ -6,9 +6,6 @@ const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false },
-      // PostgreSQL 15+ dropped public from the default search_path for
-      // non-superusers. Explicitly set it so table lookups work.
-      options: '-c search_path=public',
     }
   : {
       host:     process.env.DB_HOST,
@@ -16,10 +13,16 @@ const poolConfig = process.env.DATABASE_URL
       database: process.env.DB_NAME,
       user:     process.env.DB_USER,
       password: process.env.DB_PASSWORD,
-      options:  '-c search_path=public',
     };
 
 const pool = new Pool(poolConfig);
+
+// PostgreSQL 15+ dropped public from the default search_path for non-superusers.
+// Set it explicitly on every new connection so table lookups work regardless of
+// how the server role is configured.
+pool.on('connect', (client) => {
+  client.query('SET search_path TO public');
+});
 
 pool.on('error', (err) => {
   console.error('Unexpected PostgreSQL client error:', err.message);

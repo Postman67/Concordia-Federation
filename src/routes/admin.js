@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { body, param } = require('express-validator');
-const requireAdmin = require('../middleware/requireAdmin');
+const { requireAdmin } = require('../middleware/requireAdmin');
 const { handleValidationErrors } = require('../middleware/validate');
 const { listUsers, getUser, updateUser, deleteUser, getStats } = require('../controllers/adminController');
 

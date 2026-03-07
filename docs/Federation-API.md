@@ -1,5 +1,7 @@
 # Concordia Federation — API Reference
 
+> Last updated: March 7, 2026 5:08 AM PST
+
 > The Federation is the sole authentication and settings authority for all Concordia clients.
 > Individual servers never receive personal user data — only the user's `id`.
 
@@ -167,8 +169,8 @@ Returns the authenticated user's full server list, ordered by `position`.
 ```json
 {
   "servers": [
-    { "id": 1, "server_address": "192.168.1.10:8080", "nickname": "My Home Server", "position": 0, "added_at": "..." },
-    { "id": 2, "server_address": "play.concordia.gg:8080", "nickname": null, "position": 1, "added_at": "..." }
+    { "id": 1, "server_address": "192.168.1.10:8080", "server_name": "My Home Server", "position": 0, "added_at": "..." },
+    { "id": 2, "server_address": "play.concordia.gg:8080", "server_name": null, "position": 1, "added_at": "..." }
   ]
 }
 ```
@@ -184,16 +186,16 @@ Adds a server to the user's list.
 | Field | Type | Rules |
 |-------|------|-------|
 | `server_address` | string | Required. IP or domain:port. Max 255 chars. |
-| `nickname` | string | Optional. Max 100 chars. |
+| `server_name` | string | Optional. The server's display name, fetched from the server by the client and pushed here. Max 100 chars. |
 
 ```json
-{ "server_address": "192.168.1.10:8080", "nickname": "My Home Server" }
+{ "server_address": "192.168.1.10:8080", "server_name": "My Home Server" }
 ```
 
 **`201 Created`**
 ```json
 {
-  "server": { "id": 1, "server_address": "192.168.1.10:8080", "nickname": "My Home Server", "position": 0, "added_at": "..." }
+  "server": { "id": 1, "server_address": "192.168.1.10:8080", "server_name": "My Home Server", "position": 0, "added_at": "..." }
 }
 ```
 
@@ -209,7 +211,7 @@ Updates the `nickname` or `position` of an entry. Only sent fields are changed.
 
 | Field | Type | Rules |
 |-------|------|-------|
-| `nickname` | string | Max 100 chars. |
+| `server_name` | string | The server's display name pushed from the client. Max 100 chars. |
 | `position` | integer | Non-negative integer. |
 
 **`200 OK`** Returns updated server object.
@@ -250,7 +252,7 @@ user_servers                                      ← server list, no user PII s
 ├── id             SERIAL PRIMARY KEY
 ├── user_id        INTEGER → users.id
 ├── server_address VARCHAR(255) NOT NULL
-├── nickname       VARCHAR(100)
+├── server_name    VARCHAR(100)        ← pushed by client from the server
 ├── position       INTEGER DEFAULT 0
 └── added_at       TIMESTAMPTZ  DEFAULT NOW()
 ```

@@ -14,21 +14,21 @@ const addRules = [
     .isLength({ max: 255 })
     .withMessage('server_address must be 255 characters or fewer.'),
 
-  body('nickname')
+  body('server_name')
     .optional()
     .trim()
     .isLength({ max: 100 })
-    .withMessage('nickname must be 100 characters or fewer.'),
+    .withMessage('server_name must be 100 characters or fewer.'),
 ];
 
 const updateRules = [
   param('id').isInt({ min: 1 }).withMessage('Invalid server id.'),
 
-  body('nickname')
+  body('server_name')
     .optional()
     .trim()
     .isLength({ max: 100 })
-    .withMessage('nickname must be 100 characters or fewer.'),
+    .withMessage('server_name must be 100 characters or fewer.'),
 
   body('position')
     .optional()

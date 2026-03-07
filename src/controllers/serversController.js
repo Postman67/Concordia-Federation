@@ -4,7 +4,7 @@ const pool = require('../config/db');
 async function getServers(req, res) {
   try {
     const result = await pool.query(
-      'SELECT id, server_address, nickname, position, added_at FROM user_servers WHERE user_id = $1 ORDER BY position ASC, added_at ASC',
+      'SELECT id, server_address, server_name, position, added_at FROM user_servers WHERE user_id = $1 ORDER BY position ASC, added_at ASC',
       [req.userId]
     );
     return res.json({ servers: result.rows });
@@ -16,7 +16,7 @@ async function getServers(req, res) {
 
 // POST /api/servers
 async function addServer(req, res) {
-  const { server_address, nickname } = req.body;
+  const { server_address, server_name } = req.body;
 
   try {
     // Place new server at the end of the list
@@ -27,10 +27,10 @@ async function addServer(req, res) {
     const position = posResult.rows[0].next_pos;
 
     const result = await pool.query(
-      `INSERT INTO user_servers (user_id, server_address, nickname, position)
+      `INSERT INTO user_servers (user_id, server_address, server_name, position)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, server_address, nickname, position, added_at`,
-      [req.userId, server_address, nickname ?? null, position]
+       RETURNING id, server_address, server_name, position, added_at`,
+      [req.userId, server_address, server_name ?? null, position]
     );
 
     return res.status(201).json({ server: result.rows[0] });
@@ -43,19 +43,19 @@ async function addServer(req, res) {
   }
 }
 
-// PATCH /api/servers/:id  — update nickname or position
+// PATCH /api/servers/:id  — update server_name (pushed from client) or position
 async function updateServer(req, res) {
   const { id } = req.params;
-  const { nickname, position } = req.body;
+  const { server_name, position } = req.body;
 
   try {
     const result = await pool.query(
       `UPDATE user_servers
-       SET nickname = COALESCE($1, nickname),
-           position = COALESCE($2, position)
+       SET server_name = COALESCE($1, server_name),
+           position    = COALESCE($2, position)
        WHERE id = $3 AND user_id = $4
-       RETURNING id, server_address, nickname, position, added_at`,
-      [nickname ?? null, position ?? null, id, req.userId]
+       RETURNING id, server_address, server_name, position, added_at`,
+      [server_name ?? null, position ?? null, id, req.userId]
     );
 
     if (result.rowCount === 0) {

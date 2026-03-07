@@ -1,3 +1,4 @@
+-- Last updated: March 7, 2026 5:08 AM PST
 -- Run this script once to set up the database schema.
 -- psql -U <user> -d <database> -f db/schema.sql
 
@@ -72,7 +73,7 @@ CREATE TABLE IF NOT EXISTS user_servers (
   id             SERIAL PRIMARY KEY,
   user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   server_address VARCHAR(255) NOT NULL,            -- IP or domain:port
-  nickname       VARCHAR(100),                     -- optional user-given label
+  server_name    VARCHAR(100),                     -- pushed by the client from the server itself
   position       INTEGER NOT NULL DEFAULT 0,       -- sidebar order
   added_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE (user_id, server_address)

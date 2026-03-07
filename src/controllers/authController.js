@@ -43,7 +43,7 @@ async function register(req, res) {
     );
 
     const user  = result.rows[0];
-    const token = signToken(user.id);
+    const token = signToken(user.id);  // user.id is now a UUID string
 
     return res.status(201).json({
       message: 'Account created successfully.',

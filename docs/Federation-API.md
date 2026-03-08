@@ -1,6 +1,6 @@
 ﻿# Concordia Federation — API Reference
 
-> Last updated: March 7, 2026 6:10 PM PST
+> Last updated: March 7, 2026 8:15 PM PST
 
 > The Federation is the sole authentication and settings authority for all Concordia clients.
 > Individual servers never receive personal user data — only the user's `id`.
@@ -122,8 +122,13 @@ Returns the authenticated user's profile joined with their current settings.
     "created_at": "...",
     "display_name": "Peter",
     "avatar_url": "https://example.com/avatar.png",
+    "banner_url": "https://example.com/banner.png",
+    "bio": "Just a person who loves building stuff.",
+    "profile_link": "https://linktr.ee/petersmith",
     "theme": "dark",
     "status": "online",
+    "custom_status": "Working from home 🏠",
+    "custom_status_expires_at": "2026-03-08T18:10:00.000Z",
     "last_seen": "..."
   }
 }
@@ -151,18 +156,34 @@ Explicitly sets the authenticated user’s status.
 
 **Request body**
 
-| Field | Type | Values |
-|-------|------|--------|
-| `status` | string | `online` \| `idle` \| `dnd` \| `invisible` \| `offline` |
+| Field | Type | Rules |
+|-------|------|-------|
+| `status` | string | **Required.** `online` \| `idle` \| `dnd` \| `invisible` \| `offline` |
+| `custom_status` | string | Optional. Max 100 chars. Send `""` to clear. |
+| `custom_status_duration` | string | Optional. How long the custom status lasts. Ignored if `custom_status` is empty. |
+
+**`custom_status_duration` values**
+
+| Value | Duration |
+|-------|----------|
+| `15m` | 15 minutes |
+| `1h` | 1 hour |
+| `8h` | 8 hours |
+| `24h` | 24 hours |
+| `48h` | 48 hours |
+| `3d` | 3 days |
+| `never` | Never expires (default if omitted) |
 
 ```json
-{ "status": "dnd" }
+{ "status": "dnd", "custom_status": "In a meeting", "custom_status_duration": "1h" }
 ```
 
 **`200 OK`**
 ```json
-{ "status": "dnd" }
+{ "status": "dnd", "custom_status": "In a meeting", "custom_status_expires_at": "2026-03-07T21:15:00.000Z" }
 ```
+
+> Expiry is enforced server-side. Once `custom_status_expires_at` is in the past, `custom_status` and `custom_status_expires_at` are returned as `null` — no client action required.
 
 **`400`** Invalid status value · **`401`** Missing/invalid token · **`500`** Server error
 
@@ -191,7 +212,7 @@ Returns the visible status of any user by their UUID.
 
 **`200 OK`**
 ```json
-{ "status": "online", "last_seen": "..." }
+{ "status": "online", "custom_status": "Working from home 🏠", "custom_status_expires_at": "2026-03-08T18:10:00.000Z", "last_seen": "..." }
 ```
 
 **`401`** Missing/invalid token · **`404`** User not found · **`500`** Server error
@@ -212,6 +233,9 @@ Returns the authenticated user's settings.
   "settings": {
     "display_name": "Peter",
     "avatar_url": "https://example.com/avatar.png",
+    "banner_url": "https://example.com/banner.png",
+    "bio": "Just a person who loves building stuff.",
+    "profile_link": "https://linktr.ee/petersmith",
     "theme": "dark",
     "updated_at": "..."
   }
@@ -229,8 +253,13 @@ Updates one or more settings fields. Only sent fields are changed (others are le
 | Field | Type | Rules |
 |-------|------|-------|
 | `display_name` | string | Max 100 chars. |
-| `avatar_url` | string | Must be a valid URL. |
+| `avatar_url` | string | Must be a valid URL. Profile picture. |
+| `banner_url` | string | Must be a valid URL. Profile banner. |
+| `bio` | string | Max 500 chars. |
+| `profile_link` | string | Must be a valid URL. Link shown on the profile (e.g. Linktree, personal site). |
 | `theme` | string | `"dark"` or `"light"`. |
+
+> `custom_status` is updated via `PUT /api/user/status`, not this endpoint.
 
 ```json
 { "display_name": "Peter", "theme": "light" }
@@ -370,10 +399,11 @@ Sent in response to a `ping`. Returns the server’s current UTC time so clients
 #### `status_change`
 Room: **presence** (all connected clients)  
 Fired whenever any user calls `PUT /api/user/status` or their status changes.  
-`invisible` users are always emitted as `offline` — the real status is never sent to other clients.
+`invisible` users are always emitted as `offline` — the real status is never sent to other clients.  
+`custom_status` and `custom_status_expires_at` are `null` when the custom status has expired or been cleared.
 
 ```json
-{ "userId": "a3f8c21d-...", "status": "online" }
+{ "userId": "a3f8c21d-...", "status": "online", "custom_status": "Working from home 🏠", "custom_status_expires_at": "2026-03-08T18:10:00.000Z" }
 ```
 
 ---
@@ -383,7 +413,7 @@ Room: **user:\<userId\>** (your sessions only, excluding the socket that trigger
 Fired when `PUT /api/settings` succeeds. All your other open clients should apply these values immediately.
 
 ```json
-{ "display_name": "Peter", "avatar_url": "https://...", "theme": "dark", "updated_at": "..." }
+{ "display_name": "Peter", "avatar_url": "https://...", "banner_url": "https://...", "bio": "...", "profile_link": "https://...", "theme": "dark", "updated_at": "..." }
 ```
 
 ---
@@ -421,9 +451,14 @@ users
 user_settings                                     ← one row per user, globally synced
 ├── user_id        UUID PRIMARY KEY → users.id
 ├── display_name   VARCHAR(100)
-├── avatar_url     VARCHAR(500)
+├── avatar_url     VARCHAR(500)                     ← profile picture
+├── banner_url     VARCHAR(500)                     ← profile banner
+├── bio            VARCHAR(500)
+├── profile_link   VARCHAR(500)
 ├── theme          VARCHAR(20)  DEFAULT 'dark'
 ├── status         VARCHAR(20)  DEFAULT 'offline'  ← online | idle | dnd | invisible | offline
+├── custom_status  VARCHAR(100)                     ← text shown alongside the base status
+├── custom_status_expires_at  TIMESTAMPTZ          ← null = never expires
 ├── last_seen      TIMESTAMPTZ                      ← updated by heartbeat / PUT /status
 └── updated_at     TIMESTAMPTZ  DEFAULT NOW()
 

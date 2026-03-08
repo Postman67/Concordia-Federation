@@ -11,12 +11,19 @@ const { getIO } = require('./index');
  * Broadcast a user's status change to every connected client in the presence room.
  * `invisible` is normalised to `offline` so the real status is never exposed.
  *
- * @param {string} userId
- * @param {string} status  — raw status value from the DB
+ * @param {string}      userId
+ * @param {string}      status           — raw status value from the DB
+ * @param {string|null} [customStatus]   — custom status text
+ * @param {Date|null}   [expiresAt]      — when the custom status expires (null = never)
  */
-function emitStatusChange(userId, status) {
+function emitStatusChange(userId, status, customStatus, expiresAt) {
   const visibleStatus = status === 'invisible' ? 'offline' : status;
-  getIO().to('presence').emit('status_change', { userId, status: visibleStatus });
+  getIO().to('presence').emit('status_change', {
+    userId,
+    status: visibleStatus,
+    custom_status: customStatus ?? null,
+    custom_status_expires_at: expiresAt ?? null,
+  });
 }
 
 /**

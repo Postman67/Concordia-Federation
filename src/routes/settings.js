@@ -19,6 +19,24 @@ const updateRules = [
     .isURL()
     .withMessage('avatar_url must be a valid URL.'),
 
+  body('banner_url')
+    .optional()
+    .trim()
+    .isURL()
+    .withMessage('banner_url must be a valid URL.'),
+
+  body('bio')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('bio must be 500 characters or fewer.'),
+
+  body('profile_link')
+    .optional()
+    .trim()
+    .isURL()
+    .withMessage('profile_link must be a valid URL.'),
+
   body('theme')
     .optional()
     .isIn(['dark', 'light'])

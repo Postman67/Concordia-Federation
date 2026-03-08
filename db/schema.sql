@@ -1,4 +1,4 @@
--- Last updated: March 7, 2026 5:43 PM PST
+-- Last updated: March 7, 2026 8:15 PM PST
 -- Run this script once to set up the database schema.
 -- psql -U <user> -d <database> -f db/schema.sql
 
@@ -46,18 +46,28 @@ CREATE TABLE IF NOT EXISTS user_settings (
   user_id       UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   display_name  VARCHAR(100),
   avatar_url    VARCHAR(500),
+  banner_url    VARCHAR(500),
+  bio           VARCHAR(500),
+  profile_link  VARCHAR(500),
   theme         VARCHAR(20)  NOT NULL DEFAULT 'dark',
   status        VARCHAR(20)  NOT NULL DEFAULT 'offline'
                              CHECK (status IN ('online','idle','dnd','invisible','offline')),
+  custom_status VARCHAR(100),
+  custom_status_expires_at TIMESTAMP WITH TIME ZONE,
   last_seen     TIMESTAMP WITH TIME ZONE,
   updated_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Migration: add status/last_seen to existing deployments
+-- Migration: add columns to existing deployments
 ALTER TABLE user_settings
-  ADD COLUMN IF NOT EXISTS status    VARCHAR(20) NOT NULL DEFAULT 'offline'
-                                     CHECK (status IN ('online','idle','dnd','invisible','offline')),
-  ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP WITH TIME ZONE;
+  ADD COLUMN IF NOT EXISTS status        VARCHAR(20)  NOT NULL DEFAULT 'offline'
+                                         CHECK (status IN ('online','idle','dnd','invisible','offline')),
+  ADD COLUMN IF NOT EXISTS last_seen     TIMESTAMP WITH TIME ZONE,
+  ADD COLUMN IF NOT EXISTS banner_url    VARCHAR(500),
+  ADD COLUMN IF NOT EXISTS bio           VARCHAR(500),
+  ADD COLUMN IF NOT EXISTS profile_link  VARCHAR(500),
+  ADD COLUMN IF NOT EXISTS custom_status VARCHAR(100),
+  ADD COLUMN IF NOT EXISTS custom_status_expires_at TIMESTAMP WITH TIME ZONE;
 
 DO $$
 BEGIN

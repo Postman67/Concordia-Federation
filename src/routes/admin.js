@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { body, param } = require('express-validator');
 const { requireAdmin } = require('../middleware/requireAdmin');
 const { handleValidationErrors } = require('../middleware/validate');
-const { listUsers, getUser, updateUser, deleteUser, getStats } = require('../controllers/adminController');
+const { listUsers, getUser, updateUser, deleteUser, getStats, broadcastNotice } = require('../controllers/adminController');
 
 const router = Router();
 
@@ -45,6 +45,17 @@ router.delete(
   [param('id').isUUID().withMessage('Invalid user ID.')],
   handleValidationErrors,
   deleteUser
+);
+
+// POST /api/admin/notice — broadcast a federation-wide message to all connected sockets
+router.post(
+  '/notice',
+  [
+    body('message').notEmpty().isLength({ max: 500 }).withMessage('Message is required and must be under 500 chars.'),
+    body('severity').optional().isIn(['info', 'warning', 'critical']).withMessage('severity must be info, warning, or critical.'),
+  ],
+  handleValidationErrors,
+  broadcastNotice
 );
 
 module.exports = router;

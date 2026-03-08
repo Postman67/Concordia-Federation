@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { emitSettingsSync } = require('../socket/emitter');
 
 // GET /api/settings
 async function getSettings(req, res) {
@@ -34,6 +35,8 @@ async function updateSettings(req, res) {
       [req.userId, display_name ?? null, avatar_url ?? null, theme ?? null]
     );
 
+    // Push updated settings to all the user's other open sessions
+    emitSettingsSync(req.userId, result.rows[0]);
     return res.json({ settings: result.rows[0] });
   } catch (err) {
     console.error('updateSettings error:', err.message);

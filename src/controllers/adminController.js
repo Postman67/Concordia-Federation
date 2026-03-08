@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { emitSessionRevoked, emitAccountUpdated, emitAdminNotice } = require('../socket/emitter');
 
 // GET /api/admin/users — list all users with stats
 async function listUsers(req, res) {
@@ -90,6 +91,8 @@ async function updateUser(req, res) {
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
+    // Notify the user's connected sessions so their clients re-fetch /api/user/me
+    emitAccountUpdated(req.params.id, result.rows[0]);
     return res.json({ user: result.rows[0] });
   } catch (err) {
     if (err.code === '23505') {
@@ -111,6 +114,8 @@ async function deleteUser(req, res) {
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
+    // Kick all active sessions before the DB row is gone
+    emitSessionRevoked(req.params.id);
     return res.status(204).send();
   } catch (err) {
     console.error('admin deleteUser error:', err.message);
@@ -134,4 +139,11 @@ async function getStats(req, res) {
   }
 }
 
-module.exports = { listUsers, getUser, updateUser, deleteUser, getStats };
+// POST /api/admin/notice — broadcast a federation-wide notice to all connected clients
+function broadcastNotice(req, res) {
+  const { message, severity = 'info' } = req.body;
+  emitAdminNotice(message, severity);
+  return res.json({ ok: true, message, severity });
+}
+
+module.exports = { listUsers, getUser, updateUser, deleteUser, getStats, broadcastNotice };

@@ -1,6 +1,6 @@
 # Concordia Federation — API Reference
 
-> Last updated: March 7, 2026 5:43 PM PST
+> Last updated: March 7, 2026 6:10 PM PST
 
 > The Federation is the sole authentication and settings authority for all Concordia clients.
 > Individual servers never receive personal user data — only the user's `id`.
@@ -16,6 +16,25 @@ All protected endpoints require a JWT in the `Authorization` header:
 Authorization: Bearer <token>
 ```
 Tokens are issued by `/api/auth/register` and `/api/auth/login`. They expire after the duration set in `JWT_EXPIRES_IN` (default `7d`).
+
+### WebSocket Connection
+
+The Federation exposes a Socket.io endpoint at the same URL as the HTTP server.
+Clients authenticate by passing their JWT in the `auth` handshake option:
+
+```js
+import { io } from 'socket.io-client';
+
+const socket = io('https://federation.concordiachat.com', {
+  auth: { token: '<jwt>' }
+});
+```
+
+On successful connection the client is placed in two rooms:
+- `user:<userId>` — events targeted at **your sessions only**
+- `presence` — events broadcast to **all connected clients**
+
+See the [WebSocket Events](#websocket-events) section for the full event reference.
 
 ---
 
@@ -389,11 +408,36 @@ Modifies a user's account fields or settings. Only sent fields are updated.
 
 Permanently deletes a user and all associated settings and servers (cascade).
 
-> The master admin UUID (`ADMIN_UUID`) cannot be deleted.
+> The master admin UUID (`ADMIN_UUID`) cannot be deleted.  
+> All active WebSocket sessions for the deleted user receive a `session_revoked` event before the row is removed.
 
 **`204 No Content`** — deleted successfully.
 
 **`400`** Attempt to delete admin account · **`404`** User not found · **`500`** Server error
+
+---
+
+### `POST /api/admin/notice`
+
+Broadcasts a federation-wide notice to **every currently connected client** via the `admin_notice` WebSocket event.
+
+**Request body**
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `message` | string | Required. Max 500 chars. |
+| `severity` | string | Optional. `"info"` (default) \| `"warning"` \| `"critical"`. |
+
+```json
+{ "message": "Scheduled maintenance in 10 minutes. Expect brief downtime.", "severity": "warning" }
+```
+
+**`200 OK`**
+```json
+{ "ok": true, "message": "...", "severity": "warning" }
+```
+
+**`400`** Validation failed · **`401`** Missing/invalid token · **`403`** Not admin
 
 ---
 
@@ -405,6 +449,116 @@ The admin dashboard is served as a static single-page app at `/dashboard`.
 - Log in with the admin Concordia account credentials.
 - The dashboard communicates with the `/api/admin/*` endpoints using the JWT stored in `localStorage`.
 - Token expiry is enforced on every page load — expired sessions redirect to the login screen automatically.
+
+---
+
+## WebSocket Events
+
+Socket URL: `wss://federation.concordiachat.com`  
+Library: [Socket.io v4](https://socket.io/docs/v4/)
+
+### Connection
+
+```js
+const socket = io('https://federation.concordiachat.com', {
+  auth: { token: localStorage.getItem('fed_token') }
+});
+
+socket.on('connect_error', (err) => {
+  // err.message: 'Authentication required.' or 'Invalid or expired token.'
+});
+```
+
+---
+
+### Client → Server events
+
+#### `ping`
+Sent by the client on its heartbeat interval (recommended: every 25–30 s).  
+The server replies with `heartbeat_ack`. Also call `POST /api/user/heartbeat` on the same interval to update `last_seen` in the database.
+
+```js
+setInterval(() => socket.emit('ping'), 25000);
+```
+
+---
+
+### Server → Client events
+
+#### `heartbeat_ack`
+Room: **requesting socket only**  
+Sent in response to a `ping`. Returns the server’s current UTC time so clients can detect clock skew.
+
+```json
+{ "server_time": "2026-03-07T18:10:00.000Z" }
+```
+
+---
+
+#### `status_change`
+Room: **presence** (all connected clients)  
+Fired whenever any user calls `PUT /api/user/status` or their status changes.  
+`invisible` users are always emitted as `offline` — the real status is never sent to other clients.
+
+```json
+{ "userId": "a3f8c21d-...", "status": "online" }
+```
+
+---
+
+#### `settings_sync`
+Room: **user:\<userId\>** (your sessions only, excluding the socket that triggered the change)  
+Fired when `PUT /api/settings` succeeds. All your other open clients should apply these values immediately.
+
+```json
+{ "display_name": "Peter", "avatar_url": "https://...", "theme": "dark", "updated_at": "..." }
+```
+
+---
+
+#### `server_list_sync`
+Room: **user:\<userId\>** (your sessions only, excluding the triggering socket)  
+Fired after any `POST`, `PATCH`, or `DELETE` to `/api/servers`. Contains the full updated list so clients don’t need to diff.
+
+```json
+{
+  "servers": [
+    { "id": "...", "server_address": "...", "server_name": "...", "position": 0, "added_at": "..." }
+  ]
+}
+```
+
+---
+
+#### `session_revoked`
+Room: **user:\<userId\>** (all sessions for that user)  
+Fired when an admin deletes the user’s account. Clients must clear all local state and redirect to the login screen immediately.
+
+```json
+{ "reason": "Account deleted by administrator." }
+```
+
+---
+
+#### `account_updated`
+Room: **user:\<userId\>** (all sessions for that user)  
+Fired when an admin edits the user’s account via `PATCH /api/admin/users/:id`. Clients should re-fetch `GET /api/user/me` to get the latest profile data.
+
+```json
+{ "user": { "id": "...", "username": "...", "email": "...", "display_name": "...", "theme": "...", "status": "..." } }
+```
+
+---
+
+#### `admin_notice`
+Room: **presence** (all connected clients)  
+Fired when an admin calls `POST /api/admin/notice`. Clients should surface this to the user as a system notification.
+
+```json
+{ "message": "Scheduled maintenance in 10 minutes.", "severity": "warning" }
+```
+
+`severity` values: `info` · `warning` · `critical`
 
 ---
 

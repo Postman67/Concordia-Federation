@@ -1,17 +1,20 @@
 require('dotenv').config();
 
+const http       = require('http');
 const path       = require('path');
 const express    = require('express');
 const cors       = require('cors');
 const pool       = require('./config/db');
+const socketServer = require('./socket/index');
 const authRoutes     = require('./routes/auth');
 const userRoutes     = require('./routes/user');
 const settingsRoutes = require('./routes/settings');
 const serversRoutes  = require('./routes/servers');
 const adminRoutes    = require('./routes/admin');
 
-const app  = express();
-const PORT = process.env.PORT || 3000;
+const app        = express();
+const httpServer = http.createServer(app);
+const PORT       = process.env.PORT || 3000;
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
@@ -48,7 +51,10 @@ async function start() {
     process.exit(1);
   }
 
-  app.listen(PORT, () => {
+  // Attach Socket.io to the http server
+  socketServer.init(httpServer);
+
+  httpServer.listen(PORT, () => {
     console.log(`Server running on port ${PORT} (${process.env.NODE_ENV || 'development'})`);
   });
 }

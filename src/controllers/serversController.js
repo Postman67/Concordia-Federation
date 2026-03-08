@@ -1,4 +1,14 @@
 const pool = require('../config/db');
+const { emitServerListSync } = require('../socket/emitter');
+
+// Helper: fetch the full ordered server list for a user and broadcast it
+async function broadcastServerList(userId) {
+  const result = await pool.query(
+    'SELECT id, server_address, server_name, position, added_at FROM user_servers WHERE user_id = $1 ORDER BY position ASC, added_at ASC',
+    [userId]
+  );
+  emitServerListSync(userId, result.rows);
+}
 
 // GET /api/servers
 async function getServers(req, res) {
@@ -33,6 +43,8 @@ async function addServer(req, res) {
       [req.userId, server_address, server_name ?? null, position]
     );
 
+    // Sync the updated list to the user's other open sessions (fire-and-forget)
+    broadcastServerList(req.userId).catch(() => {});
     return res.status(201).json({ server: result.rows[0] });
   } catch (err) {
     if (err.code === '23505') {
@@ -61,6 +73,7 @@ async function updateServer(req, res) {
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Server not found.' });
     }
+    broadcastServerList(req.userId).catch(() => {});
     return res.json({ server: result.rows[0] });
   } catch (err) {
     console.error('updateServer error:', err.message);
@@ -81,6 +94,7 @@ async function removeServer(req, res) {
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Server not found.' });
     }
+    broadcastServerList(req.userId).catch(() => {});
     return res.status(204).send();
   } catch (err) {
     console.error('removeServer error:', err.message);

@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { emitStatusChange } = require('../socket/emitter');
 
 const VALID_STATUSES = ['online', 'idle', 'dnd', 'invisible', 'offline'];
 
@@ -43,6 +44,8 @@ async function setStatus(req, res) {
              updated_at = NOW()`,
       [req.userId, status]
     );
+    // Broadcast to all connected clients so status indicators update instantly
+    emitStatusChange(req.userId, status);
     return res.json({ status });
   } catch (err) {
     console.error('setStatus error:', err.message);

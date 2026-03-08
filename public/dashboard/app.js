@@ -2,7 +2,8 @@
 const API = '/api';
 
 /* ── State ───────────────────────────────────────────────────────────────── */
-let allUsers = [];
+let allUsers     = [];
+let metricsTimer = null;
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 function getToken() { return localStorage.getItem('fed_token'); }

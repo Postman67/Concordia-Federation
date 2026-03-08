@@ -220,6 +220,28 @@
               <option value="offline">Offline</option>
             </select>
           </div>
+        </div>
+
+        <p id="edit-error" class="field-error hidden"></p>
+
+        <div class="modal-actions">
+          <button type="button" id="delete-user-btn" class="btn-danger">Delete User</button>
+          <div class="modal-actions-right">
+            <button type="button" id="cancel-btn" class="btn-ghost">Cancel</button>
+            <button type="submit" id="save-btn">Save Changes</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Confirm Delete Overlay ────────────────────────────────────── -->
+  <div id="confirm-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal" style="max-width:400px">
+      <p id="confirm-message" class="confirm-message"></p>
+      <div class="modal-actions">
+        <div></div>
+        <div class="modal-actions-right">
           <button id="confirm-cancel" class="btn-ghost">Cancel</button>
           <button id="confirm-ok" class="btn-danger">Delete</button>
         </div>

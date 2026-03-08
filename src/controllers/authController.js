@@ -1,6 +1,7 @@
 const bcrypt   = require('bcrypt');
 const jwt      = require('jsonwebtoken');
 const pool     = require('../config/db');
+const { logEvent, EVENT } = require('../metrics/events');
 
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 12;
 
@@ -44,7 +45,7 @@ async function register(req, res) {
 
     const user  = result.rows[0];
     const token = signToken(user.id);  // user.id is now a UUID string
-
+    logEvent(EVENT.REGISTERED);
     return res.status(201).json({
       message: 'Account created successfully.',
       token,
@@ -75,6 +76,7 @@ async function login(req, res) {
     if (result.rowCount === 0) {
       // Use the same message for both "no account" and "wrong password" to
       // avoid leaking which emails are registered (user enumeration).
+      logEvent(EVENT.LOGIN_FAIL);
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
@@ -82,10 +84,12 @@ async function login(req, res) {
 
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     if (!passwordMatch) {
+      logEvent(EVENT.LOGIN_FAIL);
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
     const token = signToken(user.id);
+    logEvent(EVENT.LOGIN_SUCCESS);
 
     return res.status(200).json({
       message: 'Login successful.',

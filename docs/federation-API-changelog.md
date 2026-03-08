@@ -5,6 +5,35 @@ Format: `[YYYY-MM-DD HH:MM TZ] — Summary`
 
 ---
 
+## [2026-03-07 9:00 PM PST] — Admin metrics
+
+### Added
+
+**New database tables:**
+- `federation_events` — append-only event log (login_success, login_fail, user_registered). Rows older than 90 days are pruned automatically.
+- `federation_counters` — lifetime totals per event type; survive the 90-day prune.
+
+**`GET /api/admin/metrics`** — live snapshot including:
+- Active WebSocket connections
+- Daily Active Users (24 h) and Weekly Active Users (7 d)
+- Average servers per user
+- Status distribution across all users
+- PostgreSQL pool stats (total / idle / waiting)
+- Process uptime and memory (RSS, heap)
+- Lifetime event totals (successful logins, failed attempts, registrations)
+- Average response time per primary route since last restart (`/api/auth`, `/api/user`, `/api/settings`, `/api/servers`)
+
+**`GET /api/admin/metrics/history?days=7`** — per-day breakdown of login_success, login_fail, user_registered (max 90 days). Always returns a complete day array with zero-filled gaps.
+
+**Admin dashboard Metrics tab** — displays all of the above with auto-refresh every 30 s. Includes CSS-only 7-day bar charts; no external libraries.
+
+### Changed
+
+- `POST /api/auth/register` and `POST /api/auth/login` now emit events to `federation_events` and increment `federation_counters`.
+- Primary API routes now tracked for response time via an in-memory rolling accumulator (resets on server restart).
+
+---
+
 ## [2026-03-07 8:15 PM PST] — Custom status expiry
 
 ### Added

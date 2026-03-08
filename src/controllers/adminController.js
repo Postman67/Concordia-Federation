@@ -1,5 +1,7 @@
 const pool = require('../config/db');
 const { emitSessionRevoked, emitAccountUpdated, emitAdminNotice } = require('../socket/emitter');
+const { getIO } = require('../socket/index');
+const { getStats: getRtStats } = require('../metrics/responseTime');
 
 // GET /api/admin/users — list all users with stats
 async function listUsers(req, res) {
@@ -146,4 +148,113 @@ function broadcastNotice(req, res) {
   return res.json({ ok: true, message, severity });
 }
 
-module.exports = { listUsers, getUser, updateUser, deleteUser, getStats, broadcastNotice };
+// GET /api/admin/metrics — live snapshot of all federation metrics
+async function getMetrics(req, res) {
+  // Prune events older than 90 days on every fetch (fire-and-forget)
+  pool.query("DELETE FROM federation_events WHERE occurred_at < NOW() - INTERVAL '90 days'")
+    .catch(e => console.error('metrics prune:', e.message));
+
+  try {
+    const [liveResult, lifetimeResult, statusResult] = await Promise.all([
+      pool.query(`
+        SELECT
+          (SELECT COUNT(*) FROM user_settings
+            WHERE last_seen > NOW() - INTERVAL '24 hours')::int AS dau,
+          (SELECT COUNT(*) FROM user_settings
+            WHERE last_seen > NOW() - INTERVAL '7 days')::int   AS wau,
+          (SELECT ROUND(AVG(cnt)::numeric, 1)::text
+           FROM (
+             SELECT COUNT(srv.id) AS cnt
+             FROM users u LEFT JOIN user_servers srv ON srv.user_id = u.id
+             GROUP BY u.id
+           ) t) AS avg_servers_per_user
+      `),
+      pool.query('SELECT key, value FROM federation_counters'),
+      pool.query(`
+        SELECT COALESCE(status, 'offline') AS status, COUNT(*)::int AS count
+        FROM user_settings GROUP BY status
+      `),
+    ]);
+
+    const live = liveResult.rows[0];
+
+    const lifetime = {};
+    for (const row of lifetimeResult.rows) lifetime[row.key] = parseInt(row.value, 10);
+
+    const statusDist = {};
+    for (const row of statusResult.rows) statusDist[row.status] = row.count;
+
+    const mem = process.memoryUsage();
+    let activeConns = 0;
+    try { activeConns = getIO().engine.clientsCount; } catch (_) {}
+
+    return res.json({
+      metrics: {
+        active_connections:   activeConns,
+        dau:                  live.dau  ?? 0,
+        wau:                  live.wau  ?? 0,
+        avg_servers_per_user: live.avg_servers_per_user ?? '0.0',
+        status_distribution:  statusDist,
+        db_pool: {
+          total:   pool.totalCount   ?? null,
+          idle:    pool.idleCount    ?? null,
+          waiting: pool.waitingCount ?? null,
+        },
+        uptime_seconds: Math.floor(process.uptime()),
+        memory_mb: {
+          rss:        Math.round(mem.rss        / 1024 / 1024),
+          heap_used:  Math.round(mem.heapUsed   / 1024 / 1024),
+          heap_total: Math.round(mem.heapTotal  / 1024 / 1024),
+        },
+        lifetime,
+        avg_response_ms: getRtStats(),
+      },
+    });
+  } catch (err) {
+    console.error('admin getMetrics error:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+// GET /api/admin/metrics/history — per-day event counts (default 7 days, max 90)
+async function getMetricsHistory(req, res) {
+  const days = Math.min(Math.max(parseInt(req.query.days, 10) || 7, 1), 90);
+  try {
+    const result = await pool.query(
+      `SELECT
+         DATE(occurred_at AT TIME ZONE 'UTC') AS date,
+         event_type,
+         COUNT(*)::int                        AS count
+       FROM federation_events
+       WHERE occurred_at > NOW() - ($1::int * INTERVAL '1 day')
+       GROUP BY date, event_type
+       ORDER BY date ASC`,
+      [days]
+    );
+
+    // Pivot rows into { date, login_success, login_fail, user_registered }
+    const byDate = {};
+    for (const row of result.rows) {
+      if (!byDate[row.date]) {
+        byDate[row.date] = { date: row.date, login_success: 0, login_fail: 0, user_registered: 0 };
+      }
+      byDate[row.date][row.event_type] = row.count;
+    }
+
+    // Fill every UTC day in the range so the client always gets a full array
+    const history = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setUTCDate(d.getUTCDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      history.push(byDate[key] ?? { date: key, login_success: 0, login_fail: 0, user_registered: 0 });
+    }
+
+    return res.json({ history });
+  } catch (err) {
+    console.error('admin getMetricsHistory error:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+}
+
+module.exports = { listUsers, getUser, updateUser, deleteUser, getStats, broadcastNotice, getMetrics, getMetricsHistory };

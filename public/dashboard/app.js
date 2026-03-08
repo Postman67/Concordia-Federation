@@ -127,11 +127,19 @@ function navigateTo(section) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   const el = document.getElementById(`section-${section}`);
   if (el) el.classList.add('active');
+  clearInterval(metricsTimer);
+  metricsTimer = null;
   if (section === 'stats') loadStats();
+  if (section === 'metrics') {
+    loadMetrics();
+    metricsTimer = setInterval(loadMetrics, 30000);
+  }
 }
 
 /* ── Logout ──────────────────────────────────────────────────────────────── */
 document.getElementById('logout-btn').addEventListener('click', () => {
+  clearInterval(metricsTimer);
+  metricsTimer = null;
   clearToken();
   showLogin();
 });
@@ -313,7 +321,112 @@ async function loadStats() {
   document.getElementById('stat-servers').textContent = data.stats.unique_servers;
   document.getElementById('stat-entries').textContent = data.stats.total_server_entries;
 }
+/* ── Metrics ───────────────────────────────────────────────────────────────────────── */
+async function loadMetrics() {
+  const [snapRes, histRes] = await Promise.all([
+    apiFetch('/admin/metrics'),
+    apiFetch('/admin/metrics/history?days=7'),
+  ]);
+  if (snapRes.ok) renderMetricsSnapshot(snapRes.data.metrics);
+  if (histRes.ok) renderMetricsHistory(histRes.data.history);
+}
 
+function formatUptime(seconds) {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function renderMetricsSnapshot(m) {
+  document.getElementById('m-connections').textContent = m.active_connections ?? '—';
+  document.getElementById('m-dau').textContent         = m.dau ?? '—';
+  document.getElementById('m-wau').textContent         = m.wau ?? '—';
+  document.getElementById('m-avg-servers').textContent = m.avg_servers_per_user ?? '—';
+  document.getElementById('m-uptime').textContent      = m.uptime_seconds != null ? formatUptime(m.uptime_seconds) : '—';
+  document.getElementById('m-memory').textContent      = m.memory_mb?.rss != null ? `${m.memory_mb.rss} MB` : '—';
+
+  document.getElementById('m-lt-logins').textContent = m.lifetime?.login_success   ?? '—';
+  document.getElementById('m-lt-fails').textContent  = m.lifetime?.login_fail       ?? '—';
+  document.getElementById('m-lt-reg').textContent    = m.lifetime?.user_registered  ?? '—';
+
+  document.getElementById('pool-total').textContent   = m.db_pool?.total   ?? '—';
+  document.getElementById('pool-idle').textContent    = m.db_pool?.idle    ?? '—';
+  document.getElementById('pool-waiting').textContent = m.db_pool?.waiting ?? '—';
+  document.getElementById('heap-used').textContent    = m.memory_mb?.heap_used  != null ? `${m.memory_mb.heap_used} MB`  : '—';
+  document.getElementById('heap-total').textContent   = m.memory_mb?.heap_total != null ? `${m.memory_mb.heap_total} MB` : '—';
+
+  // Response time table
+  const tbody = document.getElementById('response-tbody');
+  const rt = m.avg_response_ms || {};
+  const routes = Object.keys(rt);
+  if (routes.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="2" class="loading-cell" style="color:var(--text-muted)">No data yet — make some API requests first.</td></tr>';
+  } else {
+    tbody.innerHTML = routes.map(r =>
+      `<tr><td>${escHtml(r)}</td><td>${rt[r] != null ? rt[r] + ' ms' : '—'}</td></tr>`
+    ).join('');
+  }
+
+  renderStatusBar(m.status_distribution || {});
+}
+
+const STATUS_COLORS = {
+  online: '#3ba55d', idle: '#faa81a', dnd: '#ed4245', invisible: '#747f8d', offline: '#5c5f66',
+};
+const STATUS_LABELS = {
+  online: 'Online', idle: 'Idle', dnd: 'DND', invisible: 'Invisible', offline: 'Offline',
+};
+
+function renderStatusBar(dist) {
+  const total = Object.values(dist).reduce((a, b) => a + Number(b), 0);
+  const track  = document.getElementById('status-bar');
+  const legend = document.getElementById('status-legend');
+
+  if (total === 0) {
+    track.innerHTML  = '<div style="width:100%;background:var(--bg-tertiary);border-radius:4px;height:100%"></div>';
+    legend.innerHTML = '<span style="color:var(--text-muted);font-size:0.8rem">No users online</span>';
+    return;
+  }
+
+  const order = ['online', 'idle', 'dnd', 'invisible', 'offline'];
+  track.innerHTML = order.map(s => {
+    const count = Number(dist[s] || 0);
+    if (count === 0) return '';
+    const pct = (count / total * 100).toFixed(1);
+    return `<div class="status-bar-seg" style="width:${pct}%;background:${STATUS_COLORS[s]}" title="${STATUS_LABELS[s]}: ${count}"></div>`;
+  }).join('');
+
+  legend.innerHTML = order
+    .filter(s => Number(dist[s] || 0) > 0)
+    .map(s => `<span class="status-legend-item"><span class="status-dot" style="background:${STATUS_COLORS[s]}"></span>${escHtml(STATUS_LABELS[s])} <strong>${dist[s]}</strong></span>`)
+    .join('');
+}
+
+function renderMetricsHistory(history) {
+  const maxLogin = Math.max(...history.map(d => d.login_success),   1);
+  const maxFail  = Math.max(...history.map(d => d.login_fail),      1);
+  const maxReg   = Math.max(...history.map(d => d.user_registered), 1);
+  renderBarChart('chart-logins', history, 'login_success',   maxLogin, '#5865f2');
+  renderBarChart('chart-fails',  history, 'login_fail',      maxFail,  '#ed4245');
+  renderBarChart('chart-regs',   history, 'user_registered', maxReg,   '#3ba55d');
+}
+
+function renderBarChart(elId, history, key, maxVal, color) {
+  const el = document.getElementById(elId);
+  el.innerHTML = history.map(d => {
+    const val = d[key] || 0;
+    const pct = maxVal > 0 ? Math.max((val / maxVal) * 100, val > 0 ? 3 : 0) : 0;
+    const date = new Date(d.date + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    return `<div class="bar-row">
+      <span class="bar-date">${escHtml(date)}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <span class="bar-val">${val}</span>
+    </div>`;
+  }).join('');
+}
 /* ── XSS Helper ──────────────────────────────────────────────────────────── */
 function escHtml(str) {
   if (str == null) return '';

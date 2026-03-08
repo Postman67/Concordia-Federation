@@ -97,3 +97,26 @@ CREATE TABLE IF NOT EXISTS user_servers (
   added_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE (user_id, server_address)
 );
+
+-- ─── Federation Metrics ──────────────────────────────────────────────────────
+-- Append-only event log. Rows older than 90 days are pruned automatically by
+-- GET /api/admin/metrics on each fetch.
+
+CREATE TABLE IF NOT EXISTS federation_events (
+  id          BIGSERIAL    PRIMARY KEY,
+  event_type  VARCHAR(30)  NOT NULL,           -- login_success | login_fail | user_registered
+  occurred_at TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fed_events_type_date
+  ON federation_events (event_type, occurred_at);
+
+-- Lifetime counters — survive the 90-day event prune.
+CREATE TABLE IF NOT EXISTS federation_counters (
+  key    VARCHAR(50) PRIMARY KEY,
+  value  BIGINT NOT NULL DEFAULT 0
+);
+
+INSERT INTO federation_counters (key, value)
+  VALUES ('login_success', 0), ('login_fail', 0), ('user_registered', 0)
+  ON CONFLICT (key) DO NOTHING;

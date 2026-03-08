@@ -1,6 +1,6 @@
 # Concordia Federation — Admin Reference
 
-> Last updated: March 7, 2026 6:10 PM PST
+> Last updated: March 7, 2026 9:00 PM PST
 
 > Admin endpoints and the dashboard are restricted to the account whose UUID matches the `ADMIN_UUID` environment variable.
 
@@ -156,6 +156,56 @@ Broadcasts a federation-wide notice to **every currently connected client** via 
 
 ---
 
+### `GET /api/admin/metrics`
+
+Returns a live snapshot of all federation metrics.
+
+**`200 OK`**
+```json
+{
+  "metrics": {
+    "active_connections": 12,
+    "dau": 8,
+    "wau": 31,
+    "avg_servers_per_user": "2.4",
+    "status_distribution": { "online": 5, "idle": 2, "dnd": 1, "invisible": 0, "offline": 34 },
+    "db_pool": { "total": 10, "idle": 8, "waiting": 0 },
+    "uptime_seconds": 7200,
+    "memory_mb": { "rss": 82, "heap_used": 46, "heap_total": 64 },
+    "lifetime": { "login_success": 1423, "login_fail": 37, "user_registered": 42 },
+    "avg_response_ms": { "/api/auth": 45, "/api/user": 12, "/api/settings": 8, "/api/servers": 15 }
+  }
+}
+```
+
+> Also prunes `federation_events` rows older than 90 days on each call (fire-and-forget).
+
+---
+
+### `GET /api/admin/metrics/history`
+
+Returns a per-day breakdown of event counts for chart rendering.
+
+**Query parameters**
+
+| Param | Default | Max |
+|-------|---------|-----|
+| `days` | `7` | `90` |
+
+**`200 OK`**
+```json
+{
+  "history": [
+    { "date": "2026-03-01", "login_success": 15, "login_fail": 2, "user_registered": 3 },
+    { "date": "2026-03-02", "login_success": 22, "login_fail": 1, "user_registered": 0 }
+  ]
+}
+```
+
+Every day in the requested range is always present (zero-filled if no events occurred).
+
+---
+
 ## Dashboard
 
 The admin dashboard is a static single-page app served directly by the Federation server.
@@ -174,6 +224,7 @@ The admin dashboard is a static single-page app served directly by the Federatio
 | Edit modal | Modify username, email, display name, avatar URL, theme, status |
 | Delete | Confirms before deletion; master admin account is protected |
 | Stats page | Total users, unique servers, total server entries |
+| Metrics page | Live connections, DAU/WAU, status distribution, DB pool, uptime, memory, lifetime event counters, avg response times, 7-day bar charts |
 
 ---
 

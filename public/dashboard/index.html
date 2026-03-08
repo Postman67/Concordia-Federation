@@ -45,6 +45,7 @@
       <ul class="nav-list">
         <li><a href="#" class="nav-link active" data-section="users">Users</a></li>
         <li><a href="#" class="nav-link" data-section="stats">Stats</a></li>
+        <li><a href="#" class="nav-link" data-section="metrics">Metrics</a></li>
       </ul>
 
       <div class="sidebar-footer">
@@ -94,6 +95,80 @@
           <div class="stat-card"><div id="stat-users" class="stat-value">—</div><div class="stat-label">Total Users</div></div>
           <div class="stat-card"><div id="stat-servers" class="stat-value">—</div><div class="stat-label">Unique Servers</div></div>
           <div class="stat-card"><div id="stat-entries" class="stat-value">—</div><div class="stat-label">Server Entries</div></div>
+        </div>
+      </section>
+
+      <!-- ── Metrics Section ──────────────────────────────────── -->
+      <section id="section-metrics" class="section hidden">
+        <div class="section-header">
+          <h2>Metrics</h2>
+          <span class="section-subtitle">Live snapshot · auto-refreshes every 30 s</span>
+        </div>
+
+        <!-- Live snapshot cards -->
+        <div class="metrics-cards">
+          <div class="metric-card"><div id="m-connections" class="metric-value">—</div><div class="metric-label">Live Connections</div></div>
+          <div class="metric-card"><div id="m-dau"         class="metric-value">—</div><div class="metric-label">Daily Active Users</div></div>
+          <div class="metric-card"><div id="m-wau"         class="metric-value">—</div><div class="metric-label">Weekly Active Users</div></div>
+          <div class="metric-card"><div id="m-avg-servers" class="metric-value">—</div><div class="metric-label">Avg Servers / User</div></div>
+          <div class="metric-card"><div id="m-uptime"      class="metric-value">—</div><div class="metric-label">Uptime</div></div>
+          <div class="metric-card"><div id="m-memory"      class="metric-value">—</div><div class="metric-label">Memory (RSS)</div></div>
+        </div>
+
+        <!-- Status distribution + DB pool -->
+        <div class="metrics-row">
+          <div class="metrics-panel">
+            <h3 class="panel-title">Status Distribution</h3>
+            <div id="status-bar" class="status-bar-track"></div>
+            <div id="status-legend" class="status-legend"></div>
+          </div>
+          <div class="metrics-panel metrics-panel-sm">
+            <h3 class="panel-title">DB Pool</h3>
+            <div class="pool-grid">
+              <span class="pool-label">Total</span><span id="pool-total" class="pool-val">—</span>
+              <span class="pool-label">Idle</span><span id="pool-idle" class="pool-val">—</span>
+              <span class="pool-label">Waiting</span><span id="pool-waiting" class="pool-val">—</span>
+            </div>
+            <h3 class="panel-title" style="margin-top:1rem">Heap Memory</h3>
+            <div class="pool-grid">
+              <span class="pool-label">Used</span><span id="heap-used" class="pool-val">—</span>
+              <span class="pool-label">Total</span><span id="heap-total" class="pool-val">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lifetime totals -->
+        <h3 class="metrics-section-title">Lifetime Totals</h3>
+        <div class="metrics-cards">
+          <div class="metric-card metric-card--accent"><div id="m-lt-logins" class="metric-value">—</div><div class="metric-label">Successful Logins</div></div>
+          <div class="metric-card metric-card--danger"> <div id="m-lt-fails"  class="metric-value">—</div><div class="metric-label">Failed Attempts</div></div>
+          <div class="metric-card metric-card--green">  <div id="m-lt-reg"    class="metric-value">—</div><div class="metric-label">Registrations</div></div>
+        </div>
+
+        <!-- Avg response time -->
+        <h3 class="metrics-section-title">Avg Response Time <span class="panel-note">(since last restart)</span></h3>
+        <div class="metrics-panel">
+          <table class="response-table">
+            <thead><tr><th>Route</th><th>Avg (ms)</th></tr></thead>
+            <tbody id="response-tbody"><tr><td colspan="2" class="loading-cell">Loading…</td></tr></tbody>
+          </table>
+        </div>
+
+        <!-- 7-day bar charts -->
+        <h3 class="metrics-section-title">Last 7 Days</h3>
+        <div class="charts-row">
+          <div class="chart-panel">
+            <div class="chart-title">Successful Logins</div>
+            <div id="chart-logins" class="bar-chart"></div>
+          </div>
+          <div class="chart-panel">
+            <div class="chart-title">Failed Login Attempts</div>
+            <div id="chart-fails" class="bar-chart"></div>
+          </div>
+          <div class="chart-panel">
+            <div class="chart-title">New Registrations</div>
+            <div id="chart-regs" class="bar-chart"></div>
+          </div>
         </div>
       </section>
 

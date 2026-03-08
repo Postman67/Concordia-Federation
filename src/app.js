@@ -11,6 +11,7 @@ const userRoutes     = require('./routes/user');
 const settingsRoutes = require('./routes/settings');
 const serversRoutes  = require('./routes/servers');
 const adminRoutes    = require('./routes/admin');
+const { track }      = require('./metrics/responseTime');
 
 const app        = express();
 const httpServer = http.createServer(app);
@@ -27,10 +28,10 @@ app.use('/dashboard', express.static(path.join(__dirname, '../public/dashboard')
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
-app.use('/api/auth',     authRoutes);
-app.use('/api/user',     userRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/servers',  serversRoutes);
+app.use('/api/auth',     track('/api/auth'),     authRoutes);
+app.use('/api/user',     track('/api/user'),     userRoutes);
+app.use('/api/settings', track('/api/settings'), settingsRoutes);
+app.use('/api/servers',  track('/api/servers'),  serversRoutes);
 app.use('/api/admin',    adminRoutes);
 
 // Health check

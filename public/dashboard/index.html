@@ -72,14 +72,16 @@
                 <th>Username</th>
                 <th>Email</th>
                 <th>Display Name</th>
+                <th>Status</th>
                 <th>Theme</th>
                 <th>Servers</th>
+                <th>Last Seen</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="users-tbody">
-              <tr id="users-loading-row"><td colspan="7" class="loading-cell">Loading…</td></tr>
+              <tr id="users-loading-row"><td colspan="9" class="loading-cell">Loading…</td></tr>
             </tbody>
           </table>
         </div>
@@ -133,30 +135,16 @@
               <option value="light">Light</option>
             </select>
           </div>
-        </div>
-
-        <p id="edit-error" class="field-error hidden"></p>
-
-        <div class="modal-actions">
-          <button type="button" id="delete-user-btn" class="btn-danger">Delete User</button>
-          <div class="modal-actions-right">
-            <button type="button" id="cancel-btn" class="btn-ghost">Cancel</button>
-            <button type="submit" id="save-btn">Save Changes</button>
+          <div class="field">
+            <label for="edit-status">Status</label>
+            <select id="edit-status">
+              <option value="online">Online</option>
+              <option value="idle">Idle</option>
+              <option value="dnd">Do Not Disturb</option>
+              <option value="invisible">Invisible</option>
+              <option value="offline">Offline</option>
+            </select>
           </div>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ── Confirm Delete Modal ──────────────────────────────────────── -->
-  <div id="confirm-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true">
-    <div class="modal modal-sm">
-      <div class="modal-header">
-        <h3>Confirm Delete</h3>
-      </div>
-      <p id="confirm-message" class="confirm-message"></p>
-      <div class="modal-actions">
-        <div class="modal-actions-right">
           <button id="confirm-cancel" class="btn-ghost">Cancel</button>
           <button id="confirm-ok" class="btn-danger">Delete</button>
         </div>

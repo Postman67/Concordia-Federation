@@ -5,12 +5,12 @@ async function listUsers(req, res) {
   try {
     const result = await pool.query(
       `SELECT u.id, u.username, u.email, u.created_at,
-              s.display_name, s.avatar_url, s.theme,
+              s.display_name, s.avatar_url, s.theme, s.status, s.last_seen,
               COUNT(srv.id) AS server_count
        FROM users u
        LEFT JOIN user_settings s   ON s.user_id = u.id
        LEFT JOIN user_servers  srv ON srv.user_id = u.id
-       GROUP BY u.id, s.display_name, s.avatar_url, s.theme
+       GROUP BY u.id, s.display_name, s.avatar_url, s.theme, s.status, s.last_seen
        ORDER BY u.created_at DESC`
     );
     return res.json({ users: result.rows });
@@ -25,7 +25,7 @@ async function getUser(req, res) {
   try {
     const userResult = await pool.query(
       `SELECT u.id, u.username, u.email, u.created_at, u.updated_at,
-              s.display_name, s.avatar_url, s.theme
+              s.display_name, s.avatar_url, s.theme, s.status, s.last_seen
        FROM users u
        LEFT JOIN user_settings s ON s.user_id = u.id
        WHERE u.id = $1`,
@@ -49,7 +49,7 @@ async function getUser(req, res) {
 
 // PATCH /api/admin/users/:id — update username, email, or settings
 async function updateUser(req, res) {
-  const { username, email, display_name, avatar_url, theme } = req.body;
+  const { username, email, display_name, avatar_url, theme, status } = req.body;
 
   try {
     if (username || email) {
@@ -63,23 +63,24 @@ async function updateUser(req, res) {
       );
     }
 
-    if (display_name !== undefined || avatar_url !== undefined || theme !== undefined) {
+    if (display_name !== undefined || avatar_url !== undefined || theme !== undefined || status !== undefined) {
       await pool.query(
-        `INSERT INTO user_settings (user_id, display_name, avatar_url, theme)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO user_settings (user_id, display_name, avatar_url, theme, status)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (user_id) DO UPDATE
            SET display_name = COALESCE(EXCLUDED.display_name, user_settings.display_name),
                avatar_url   = COALESCE(EXCLUDED.avatar_url,   user_settings.avatar_url),
                theme        = COALESCE(EXCLUDED.theme,        user_settings.theme),
+               status       = COALESCE(EXCLUDED.status,       user_settings.status),
                updated_at   = NOW()`,
-        [req.params.id, display_name ?? null, avatar_url ?? null, theme ?? null]
+        [req.params.id, display_name ?? null, avatar_url ?? null, theme ?? null, status ?? null]
       );
     }
 
     // Return fresh user snapshot
     const result = await pool.query(
       `SELECT u.id, u.username, u.email, u.created_at, u.updated_at,
-              s.display_name, s.avatar_url, s.theme
+              s.display_name, s.avatar_url, s.theme, s.status, s.last_seen
        FROM users u
        LEFT JOIN user_settings s ON s.user_id = u.id
        WHERE u.id = $1`,

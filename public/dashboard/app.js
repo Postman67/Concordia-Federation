@@ -143,7 +143,7 @@ async function loadUsers() {
 
   const { ok, data } = await apiFetch('/admin/users');
   if (!ok) {
-    tbody.innerHTML = `<tr><td colspan="7" class="loading-cell" style="color:var(--danger)">Failed to load users.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="loading-cell" style="color:var(--danger)">Failed to load users.</td></tr>`;
     return;
   }
 
@@ -151,10 +151,25 @@ async function loadUsers() {
   renderUsers(allUsers);
 }
 
+const STATUS_DOT = {
+  online:    '#3ba55d',
+  idle:      '#faa81a',
+  dnd:       '#ed4245',
+  invisible: '#747f8d',
+  offline:   '#747f8d',
+};
+
+function statusBadge(status) {
+  const s = status || 'offline';
+  const color = STATUS_DOT[s] || STATUS_DOT.offline;
+  const label = { online: 'Online', idle: 'Idle', dnd: 'DND', invisible: 'Invisible', offline: 'Offline' }[s] || s;
+  return `<span class="status-badge" style="--dot:${color}">${escHtml(label)}</span>`;
+}
+
 function renderUsers(users) {
   const tbody = document.getElementById('users-tbody');
   if (!users.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="loading-cell">No users found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="loading-cell">No users found.</td></tr>';
     return;
   }
 
@@ -163,8 +178,10 @@ function renderUsers(users) {
       <td>${escHtml(u.username)}</td>
       <td>${escHtml(u.email)}</td>
       <td>${escHtml(u.display_name || '—')}</td>
+      <td>${statusBadge(u.status)}</td>
       <td>${escHtml(u.theme || 'dark')}</td>
       <td>${u.server_count}</td>
+      <td>${formatDate(u.last_seen)}</td>
       <td>${formatDate(u.created_at)}</td>
       <td><button class="edit-btn" data-id="${escHtml(u.id)}">Edit</button></td>
     </tr>
@@ -200,6 +217,7 @@ function openEditModal(userId) {
   document.getElementById('edit-display-name').value  = user.display_name || '';
   document.getElementById('edit-avatar-url').value    = user.avatar_url || '';
   document.getElementById('edit-theme').value         = user.theme || 'dark';
+  document.getElementById('edit-status').value        = user.status || 'offline';
   document.getElementById('modal-title').textContent  = `Edit — ${user.username}`;
   hideError(editError);
 
@@ -226,6 +244,7 @@ editForm.addEventListener('submit', async (e) => {
     display_name: document.getElementById('edit-display-name').value.trim()  || undefined,
     avatar_url:   document.getElementById('edit-avatar-url').value.trim()    || undefined,
     theme:        document.getElementById('edit-theme').value,
+    status:       document.getElementById('edit-status').value,
   };
 
   const { ok, data } = await apiFetch(`/admin/users/${id}`, {

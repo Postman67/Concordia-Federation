@@ -33,6 +33,7 @@ router.patch(
     body('display_name').optional().isLength({ max: 100 }).withMessage('Display name too long.'),
     body('avatar_url').optional().isURL().withMessage('Invalid avatar URL.'),
     body('theme').optional().isIn(['dark', 'light']).withMessage('Theme must be dark or light.'),
+    body('status').optional().isIn(['online', 'idle', 'dnd', 'invisible', 'offline']).withMessage('Invalid status value.'),
   ],
   handleValidationErrors,
   updateUser

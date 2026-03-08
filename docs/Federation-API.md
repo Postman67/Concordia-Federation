@@ -1,6 +1,6 @@
 # Concordia Federation — API Reference
 
-> Last updated: March 7, 2026 3:56 PM PST
+> Last updated: March 7, 2026 5:43 PM PST
 
 > The Federation is the sole authentication and settings authority for all Concordia clients.
 > Individual servers never receive personal user data — only the user's `id`.
@@ -103,9 +103,76 @@ Returns the authenticated user's profile joined with their current settings.
     "created_at": "...",
     "display_name": "Peter",
     "avatar_url": "https://example.com/avatar.png",
-    "theme": "dark"
+    "theme": "dark",
+    "status": "online",
+    "last_seen": "..."
   }
 }
+```
+
+**`401`** Missing/invalid token · **`404`** User not found · **`500`** Server error
+
+---
+
+## Status — `/api/user` 🔒
+
+Users have five possible statuses:
+
+| Value | Meaning |
+|-------|---------|
+| `online` | Actively connected to the Federation. |
+| `idle` | Logged in but no recent client activity (set by the client after inactivity). |
+| `dnd` | Do Not Disturb — manually set. |
+| `invisible` | Logged in but appears `offline` to all other users. |
+| `offline` | Not logged in, or manually set. |
+
+### `PUT /api/user/status`
+
+Explicitly sets the authenticated user’s status.
+
+**Request body**
+
+| Field | Type | Values |
+|-------|------|--------|
+| `status` | string | `online` \| `idle` \| `dnd` \| `invisible` \| `offline` |
+
+```json
+{ "status": "dnd" }
+```
+
+**`200 OK`**
+```json
+{ "status": "dnd" }
+```
+
+**`400`** Invalid status value · **`401`** Missing/invalid token · **`500`** Server error
+
+---
+
+### `POST /api/user/heartbeat`
+
+Updates `last_seen` to now. If the user’s current status is `offline`, it is automatically switched to `online`.
+
+Clients should call this on a regular interval (e.g. every 30–60 seconds) while the user is active, and call `PUT /api/user/status` with `idle` after a period of inactivity.
+
+**`200 OK`**
+```json
+{ "ok": true }
+```
+
+**`401`** Missing/invalid token · **`500`** Server error
+
+---
+
+### `GET /api/user/status/:id`
+
+Returns the visible status of any user by their UUID.
+
+> `invisible` users are returned as `offline` — the caller cannot tell the difference.
+
+**`200 OK`**
+```json
+{ "status": "online", "last_seen": "..." }
 ```
 
 **`401`** Missing/invalid token · **`404`** User not found · **`500`** Server error
@@ -357,6 +424,8 @@ user_settings                                     ← one row per user, globally
 ├── display_name   VARCHAR(100)
 ├── avatar_url     VARCHAR(500)
 ├── theme          VARCHAR(20)  DEFAULT 'dark'
+├── status         VARCHAR(20)  DEFAULT 'offline'  ← online | idle | dnd | invisible | offline
+├── last_seen      TIMESTAMPTZ                      ← updated by heartbeat / PUT /status
 └── updated_at     TIMESTAMPTZ  DEFAULT NOW()
 
 user_servers                                      ← server list, no user PII sent to servers

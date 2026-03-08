@@ -1,4 +1,4 @@
--- Last updated: March 7, 2026 2:48 PM PST
+-- Last updated: March 7, 2026 5:43 PM PST
 -- Run this script once to set up the database schema.
 -- psql -U <user> -d <database> -f db/schema.sql
 
@@ -47,8 +47,17 @@ CREATE TABLE IF NOT EXISTS user_settings (
   display_name  VARCHAR(100),
   avatar_url    VARCHAR(500),
   theme         VARCHAR(20)  NOT NULL DEFAULT 'dark',
+  status        VARCHAR(20)  NOT NULL DEFAULT 'offline'
+                             CHECK (status IN ('online','idle','dnd','invisible','offline')),
+  last_seen     TIMESTAMP WITH TIME ZONE,
   updated_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Migration: add status/last_seen to existing deployments
+ALTER TABLE user_settings
+  ADD COLUMN IF NOT EXISTS status    VARCHAR(20) NOT NULL DEFAULT 'offline'
+                                     CHECK (status IN ('online','idle','dnd','invisible','offline')),
+  ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP WITH TIME ZONE;
 
 DO $$
 BEGIN

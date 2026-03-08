@@ -11,6 +11,7 @@ const userRoutes     = require('./routes/user');
 const settingsRoutes = require('./routes/settings');
 const serversRoutes  = require('./routes/servers');
 const adminRoutes    = require('./routes/admin');
+const internalRoutes = require('./routes/internal');
 const { track }      = require('./metrics/responseTime');
 
 const app        = express();
@@ -33,6 +34,7 @@ app.use('/api/user',     track('/api/user'),     userRoutes);
 app.use('/api/settings', track('/api/settings'), settingsRoutes);
 app.use('/api/servers',  track('/api/servers'),  serversRoutes);
 app.use('/api/admin',    adminRoutes);
+app.use('/api/internal', internalRoutes);
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));

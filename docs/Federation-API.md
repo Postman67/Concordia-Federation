@@ -1,4 +1,4 @@
-# Concordia Federation — API Reference
+﻿# Concordia Federation — API Reference
 
 > Last updated: March 7, 2026 6:10 PM PST
 
@@ -316,139 +316,11 @@ Removes a server from the user's list.
 
 ---
 
-## Admin — `/api/admin` 🔒🛡
+## Admin
 
-All admin endpoints require a JWT whose `sub` claim matches the `ADMIN_UUID` environment variable.
-Obtain a token by logging in as the admin account via `POST /api/auth/login`.
+Admin API endpoints, the web dashboard, and admin-related WebSocket events are documented separately.
 
-Admin requests return `403 Forbidden` if the token is valid but does not belong to the admin UUID.
-
----
-
-### `GET /api/admin/stats`
-
-Returns federation-wide aggregate counts.
-
-**`200 OK`**
-```json
-{
-  "stats": {
-    "total_users": "42",
-    "total_server_entries": "137",
-    "unique_servers": "25"
-  }
-}
-```
-
----
-
-### `GET /api/admin/users`
-
-Returns all users with their settings and server count.
-
-**`200 OK`**
-```json
-{
-  "users": [
-    {
-      "id": "a3f8c21d-...",
-      "username": "petersmith",
-      "email": "peter@example.com",
-      "display_name": "Peter",
-      "avatar_url": "https://example.com/avatar.png",
-      "theme": "dark",
-      "server_count": "3",
-      "created_at": "..."
-    }
-  ]
-}
-```
-
----
-
-### `GET /api/admin/users/:id`
-
-Returns full detail for a single user including their server list.
-
-**`200 OK`**
-```json
-{
-  "user": { "id": "...", "username": "petersmith", "email": "...", "display_name": "Peter", "avatar_url": "...", "theme": "dark", "created_at": "...", "updated_at": "..." },
-  "servers": [ { "id": "...", "server_address": "...", "server_name": "...", "position": 0, "added_at": "..." } ]
-}
-```
-
-**`404`** User not found
-
----
-
-### `PATCH /api/admin/users/:id`
-
-Modifies a user's account fields or settings. Only sent fields are updated.
-
-**Request body** — all fields optional
-
-| Field | Type | Rules |
-|-------|------|-------|
-| `username` | string | 3–50 chars. |
-| `email` | string | Valid email. |
-| `display_name` | string | Max 100 chars. |
-| `avatar_url` | string | Valid URL. |
-| `theme` | string | `"dark"` or `"light"`. |
-
-**`200 OK`** Returns updated user object.
-
-**`400`** Validation failed · **`404`** User not found · **`409`** Username/email conflict · **`500`** Server error
-
-> Password resets are not exposed via the admin API. Use a direct DB update for emergency resets.
-
----
-
-### `DELETE /api/admin/users/:id`
-
-Permanently deletes a user and all associated settings and servers (cascade).
-
-> The master admin UUID (`ADMIN_UUID`) cannot be deleted.  
-> All active WebSocket sessions for the deleted user receive a `session_revoked` event before the row is removed.
-
-**`204 No Content`** — deleted successfully.
-
-**`400`** Attempt to delete admin account · **`404`** User not found · **`500`** Server error
-
----
-
-### `POST /api/admin/notice`
-
-Broadcasts a federation-wide notice to **every currently connected client** via the `admin_notice` WebSocket event.
-
-**Request body**
-
-| Field | Type | Rules |
-|-------|------|-------|
-| `message` | string | Required. Max 500 chars. |
-| `severity` | string | Optional. `"info"` (default) \| `"warning"` \| `"critical"`. |
-
-```json
-{ "message": "Scheduled maintenance in 10 minutes. Expect brief downtime.", "severity": "warning" }
-```
-
-**`200 OK`**
-```json
-{ "ok": true, "message": "...", "severity": "warning" }
-```
-
-**`400`** Validation failed · **`401`** Missing/invalid token · **`403`** Not admin
-
----
-
-## Dashboard
-
-The admin dashboard is served as a static single-page app at `/dashboard`.
-
-- **URL:** `https://federation.concordiachat.com/dashboard`
-- Log in with the admin Concordia account credentials.
-- The dashboard communicates with the `/api/admin/*` endpoints using the JWT stored in `localStorage`.
-- Token expiry is enforced on every page load — expired sessions redirect to the login screen automatically.
+See [Admin.md](./Admin.md).
 
 ---
 
@@ -530,35 +402,8 @@ Fired after any `POST`, `PATCH`, or `DELETE` to `/api/servers`. Contains the ful
 
 ---
 
-#### `session_revoked`
-Room: **user:\<userId\>** (all sessions for that user)  
-Fired when an admin deletes the user’s account. Clients must clear all local state and redirect to the login screen immediately.
-
-```json
-{ "reason": "Account deleted by administrator." }
-```
-
----
-
-#### `account_updated`
-Room: **user:\<userId\>** (all sessions for that user)  
-Fired when an admin edits the user’s account via `PATCH /api/admin/users/:id`. Clients should re-fetch `GET /api/user/me` to get the latest profile data.
-
-```json
-{ "user": { "id": "...", "username": "...", "email": "...", "display_name": "...", "theme": "...", "status": "..." } }
-```
-
----
-
-#### `admin_notice`
-Room: **presence** (all connected clients)  
-Fired when an admin calls `POST /api/admin/notice`. Clients should surface this to the user as a system notification.
-
-```json
-{ "message": "Scheduled maintenance in 10 minutes.", "severity": "warning" }
-```
-
-`severity` values: `info` · `warning` · `critical`
+#### `session_revoked`, `account_updated`, `admin_notice`
+These events are emitted as side-effects of admin actions. See [Admin.md](./Admin.md#admin-related-websocket-events) for full details.
 
 ---
 

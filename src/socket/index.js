@@ -175,8 +175,14 @@ function init(httpServer) {
     // time so they can detect clock skew and confirm the socket is alive.
     // A missed heartbeat will trigger Socket.IO's built-in pingTimeout
     // disconnect, which then triggers the offline grace-period logic below.
-    socket.on('ping', () => {
-      socket.emit('heartbeat_ack', { server_time: new Date().toISOString() });
+    socket.on('ping', (payload) => {
+      // Echo client_sent_at so the receiver can compute RTT-corrected clock skew:
+      //   rtt   = Date.now() - client_sent_at
+      //   skew  = server_time - (client_sent_at + rtt / 2)
+      socket.emit('heartbeat_ack', {
+        server_time:    new Date().toISOString(),
+        client_sent_at: payload?.sent_at ?? null,
+      });
     });
 
     // ── Disconnect ────────────────────────────────────────────────────────

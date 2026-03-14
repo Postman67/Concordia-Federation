@@ -165,6 +165,8 @@ Returns a live snapshot of all federation metrics.
 {
   "metrics": {
     "active_connections": 12,
+    "unique_users_online": 9,
+    "sessions_by_platform": { "desktop": 6, "web": 4, "mobile_web": 2 },
     "dau": 8,
     "wau": 31,
     "avg_servers_per_user": "2.4",

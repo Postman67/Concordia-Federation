@@ -4,7 +4,17 @@ All notable changes to the Federation API are documented here.
 Format: `[YYYY-MM-DD HH:MM TZ] — Summary`
 
 ---
+## [2026-03-14] Client platform field + graceful offline presence
 
+**Changed — WebSocket handshake**
+- Added optional `platform` field to the `auth` handshake object: `'desktop'` | `'web'` | `'mobile_web'`. Unrecognised or missing values default to `'web'`.
+- Platform is tracked server-side in a per-session in-memory registry for the duration of the connection.
+
+**Changed — Offline behaviour**
+- When a user's last socket disconnects (clean close or heartbeat timeout), the Federation now waits an **8-second grace period** before writing `status = 'offline'` to the DB and emitting `status_change`. Reconnecting within that window (e.g. page reload) cancels the timer — no offline flap occurs.
+- If the user has multiple concurrent sessions (multiple tabs/devices), going offline on one session does not affect others.
+
+---
 ## [2026-03-07 8:15 PM PST] — Custom status expiry
 
 ### Added

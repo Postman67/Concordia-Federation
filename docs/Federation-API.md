@@ -362,13 +362,26 @@ Library: [Socket.io v4](https://socket.io/docs/v4/)
 
 ```js
 const socket = io('https://federation.concordiachat.com', {
-  auth: { token: localStorage.getItem('fed_token') }
+  auth: {
+    token:    localStorage.getItem('fed_token'),
+    platform: 'desktop', // 'desktop' | 'web' | 'mobile_web' — defaults to 'web' if omitted
+  },
 });
 
 socket.on('connect_error', (err) => {
   // err.message: 'Authentication required.' or 'Invalid or expired token.'
 });
 ```
+
+The `platform` field tells the Federation which type of client is connecting. It is used to track live session counts by platform (visible in the admin Metrics tab). Valid values:
+
+| Value | Description |
+|---|---|
+| `desktop` | Concordia desktop application |
+| `web` | Browser web client |
+| `mobile_web` | Mobile browser client |
+
+Unrecognised or missing values default to `web`.
 
 ---
 
@@ -377,6 +390,8 @@ socket.on('connect_error', (err) => {
 #### `ping`
 Sent by the client on its heartbeat interval (recommended: every 25–30 s).  
 The server replies with `heartbeat_ack`. Also call `POST /api/user/heartbeat` on the same interval to update `last_seen` in the database.
+
+If the server stops receiving pings it closes the socket after `pingTimeout` (60 s). Once the user's last socket closes, the Federation waits an 8-second grace period before writing `offline` to the database and emitting `status_change` — this absorbs page reloads and brief network drops without flapping presence.
 
 ```js
 setInterval(() => socket.emit('ping'), 25000);

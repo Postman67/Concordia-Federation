@@ -628,3 +628,35 @@ td {
 }
 
 .bar-val { color: var(--text-muted); text-align: right; }
+
+/* ── Platform badges ─────────────────────────────────────────────────────── */
+.platform-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.platform-desktop    { background: rgba(88, 101, 242, 0.15); color: #7289da; }
+.platform-web        { background: rgba(59, 165, 93,  0.15); color: #43b581; }
+.platform-mobile_web { background: rgba(250, 168, 26, 0.15); color: #faa81a; }
+
+/* ── Socket ID cell ──────────────────────────────────────────────────────── */
+.socket-id { font-family: monospace; font-size: 0.78rem; color: var(--text-muted); cursor: default; }
+
+/* ── Real-time pulse indicator ───────────────────────────────────────────── */
+.rt-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  background: #3ba55d;
+  border-radius: 50%;
+  margin-left: 4px;
+  vertical-align: middle;
+  animation: rt-pulse 2s ease-in-out infinite;
+}
+@keyframes rt-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1);    }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}

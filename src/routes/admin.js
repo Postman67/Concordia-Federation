@@ -2,7 +2,7 @@ const { Router } = require('express');
 const { body, param } = require('express-validator');
 const { requireAdmin } = require('../middleware/requireAdmin');
 const { handleValidationErrors } = require('../middleware/validate');
-const { listUsers, getUser, updateUser, deleteUser, getStats, broadcastNotice, getMetrics, getMetricsHistory } = require('../controllers/adminController');
+const { listUsers, getUser, updateUser, deleteUser, getStats, broadcastNotice, getMetrics, getMetricsHistory, listActiveSessions } = require('../controllers/adminController');
 
 const router = Router();
 
@@ -63,5 +63,8 @@ router.get('/metrics', getMetrics);
 
 // GET /api/admin/metrics/history — daily breakdown (?days=7, max 90)
 router.get('/metrics/history', getMetricsHistory);
+
+// GET /api/admin/sessions — currently active WebSocket sessions
+router.get('/sessions', listActiveSessions);
 
 module.exports = router;

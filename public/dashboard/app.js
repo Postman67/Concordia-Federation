@@ -2,8 +2,10 @@
 const API = '/api';
 
 /* ── State ───────────────────────────────────────────────────────────────── */
-let allUsers     = [];
-let metricsTimer = null;
+let allUsers          = [];
+let metricsTimer      = null; // kept for legacy reference safety
+let adminSocket       = null;
+let sessionsTickTimer = null;
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 function getToken() { return localStorage.getItem('fed_token'); }
@@ -109,6 +111,7 @@ function showDashboard() {
   loginView.classList.add('hidden');
   dashboardView.classList.remove('hidden');
   document.body.classList.remove('login-page');
+  connectAdminSocket();
   loadUsers();
   navigateTo('users');
 }
@@ -128,19 +131,13 @@ function navigateTo(section) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   const el = document.getElementById(`section-${section}`);
   if (el) el.classList.add('active');
-  clearInterval(metricsTimer);
-  metricsTimer = null;
-  if (section === 'stats') loadStats();
-  if (section === 'metrics') {
-    loadMetrics();
-    metricsTimer = setInterval(loadMetrics, 30000);
-  }
+  if (section === 'stats')   loadStats();
+  if (section === 'metrics') loadMetrics();
 }
 
 /* ── Logout ──────────────────────────────────────────────────────────────── */
 document.getElementById('logout-btn').addEventListener('click', () => {
-  clearInterval(metricsTimer);
-  metricsTimer = null;
+  disconnectAdminSocket();
   clearToken();
   showLogin();
 });
@@ -321,6 +318,93 @@ async function loadStats() {
   document.getElementById('stat-users').textContent   = data.stats.total_users;
   document.getElementById('stat-servers').textContent = data.stats.unique_servers;
   document.getElementById('stat-entries').textContent = data.stats.total_server_entries;
+}/* ── Admin Real-time Socket ─────────────────────────────────────────────────── */
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function connectAdminSocket() {
+  if (adminSocket) return;
+  const token = getToken();
+  if (!token || typeof io === 'undefined') return;
+
+  adminSocket = io({ auth: { token } });
+
+  adminSocket.on('connect', () => {
+    console.log('[Admin] real-time socket connected');
+  });
+
+  adminSocket.on('admin_presence_update', ({ active_sessions, stats }) => {
+    setText('m-connections',   stats.total_sockets ?? '—');
+    setText('m-unique-online', stats.unique_users  ?? '—');
+    const plat = stats.by_platform || {};
+    setText('plat-desktop', plat.desktop    ?? '—');
+    setText('plat-web',     plat.web        ?? '—');
+    setText('plat-mobile',  plat.mobile_web ?? '—');
+    renderActiveSessions(active_sessions);
+  });
+
+  adminSocket.on('admin_system_update', ({ uptime_seconds, memory_mb, db_pool }) => {
+    setText('m-uptime',     uptime_seconds  != null   ? formatUptime(uptime_seconds)         : '—');
+    setText('m-memory',     memory_mb?.rss  != null   ? `${memory_mb.rss} MB`                : '—');
+    setText('pool-total',   db_pool?.total   ?? '—');
+    setText('pool-idle',    db_pool?.idle    ?? '—');
+    setText('pool-waiting', db_pool?.waiting ?? '—');
+    setText('heap-used',    memory_mb?.heap_used  != null ? `${memory_mb.heap_used} MB`  : '—');
+    setText('heap-total',   memory_mb?.heap_total != null ? `${memory_mb.heap_total} MB` : '—');
+  });
+
+  adminSocket.on('disconnect', () => {
+    console.log('[Admin] real-time socket disconnected (auto-reconnect pending)');
+  });
+}
+
+function disconnectAdminSocket() {
+  clearInterval(sessionsTickTimer);
+  sessionsTickTimer = null;
+  if (adminSocket) {
+    adminSocket.disconnect();
+    adminSocket = null;
+  }
+}
+
+/* ── Active Sessions ───────────────────────────────────────────────────────── */
+const PLAT_LABEL = { desktop: 'Desktop', web: 'Web', mobile_web: 'Mobile Web' };
+
+function renderActiveSessions(sessions) {
+  clearInterval(sessionsTickTimer);
+  sessionsTickTimer = null;
+  const tbody = document.getElementById('sessions-tbody');
+  if (!tbody) return;
+
+  if (!sessions || sessions.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="loading-cell" style="color:var(--text-muted)">No active connections.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sessions.map(s =>
+    `<tr>
+      <td>${escHtml(s.username)}</td>
+      <td><span class="platform-badge platform-${escHtml(s.platform)}">${escHtml(PLAT_LABEL[s.platform] || s.platform)}</span></td>
+      <td class="socket-id" title="${escHtml(s.socketId)}">${escHtml(s.socketId.slice(0, 8))}…</td>
+      <td class="duration-cell" data-connected-at="${escHtml(s.connectedAt)}"></td>
+    </tr>`
+  ).join('');
+
+  function tick() {
+    document.querySelectorAll('#sessions-tbody .duration-cell').forEach(cell => {
+      const ms   = Date.now() - new Date(cell.dataset.connectedAt).getTime();
+      const secs = Math.floor(ms / 1000);
+      const mins = Math.floor(secs / 60);
+      const hrs  = Math.floor(mins / 60);
+      cell.textContent = hrs  > 0 ? `${hrs}h ${mins % 60}m`
+                       : mins > 0 ? `${mins}m ${secs % 60}s`
+                                  : `${secs}s`;
+    });
+  }
+  tick();
+  sessionsTickTimer = setInterval(tick, 1000);
 }
 /* ── Metrics ───────────────────────────────────────────────────────────────────────── */
 async function loadMetrics() {
@@ -342,12 +426,19 @@ function formatUptime(seconds) {
 }
 
 function renderMetricsSnapshot(m) {
-  document.getElementById('m-connections').textContent = m.active_connections ?? '—';
-  document.getElementById('m-dau').textContent         = m.dau ?? '—';
-  document.getElementById('m-wau').textContent         = m.wau ?? '—';
-  document.getElementById('m-avg-servers').textContent = m.avg_servers_per_user ?? '—';
-  document.getElementById('m-uptime').textContent      = m.uptime_seconds != null ? formatUptime(m.uptime_seconds) : '—';
-  document.getElementById('m-memory').textContent      = m.memory_mb?.rss != null ? `${m.memory_mb.rss} MB` : '—';
+  document.getElementById('m-connections').textContent   = m.active_connections    ?? '—';
+  document.getElementById('m-unique-online').textContent = m.unique_users_online   ?? '—';
+  document.getElementById('m-dau').textContent           = m.dau                  ?? '—';
+  document.getElementById('m-wau').textContent           = m.wau                  ?? '—';
+  document.getElementById('m-avg-servers').textContent   = m.avg_servers_per_user ?? '—';
+  document.getElementById('m-uptime').textContent        = m.uptime_seconds != null ? formatUptime(m.uptime_seconds) : '—';
+  document.getElementById('m-memory').textContent        = m.memory_mb?.rss != null ? `${m.memory_mb.rss} MB` : '—';
+
+  // Platform breakdown
+  const plat = m.sessions_by_platform || {};
+  document.getElementById('plat-desktop').textContent = plat.desktop    ?? '—';
+  document.getElementById('plat-web').textContent     = plat.web        ?? '—';
+  document.getElementById('plat-mobile').textContent  = plat.mobile_web ?? '—';
 
   document.getElementById('m-lt-logins').textContent = m.lifetime?.login_success   ?? '—';
   document.getElementById('m-lt-fails').textContent  = m.lifetime?.login_fail       ?? '—';

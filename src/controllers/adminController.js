@@ -1,6 +1,6 @@
 const pool = require('../config/db');
 const { emitSessionRevoked, emitAccountUpdated, emitAdminNotice } = require('../socket/emitter');
-const { getIO } = require('../socket/index');
+const { getIO, getSessionStats, getActiveSessions } = require('../socket/index');
 const { getStats: getRtStats } = require('../metrics/responseTime');
 
 // GET /api/admin/users — list all users with stats
@@ -185,12 +185,13 @@ async function getMetrics(req, res) {
     for (const row of statusResult.rows) statusDist[row.status] = row.count;
 
     const mem = process.memoryUsage();
-    let activeConns = 0;
-    try { activeConns = getIO().engine.clientsCount; } catch (_) {}
+    const sessionSnap = getSessionStats();
 
     return res.json({
       metrics: {
-        active_connections:   activeConns,
+        active_connections:   sessionSnap.total_sockets,
+        unique_users_online:  sessionSnap.unique_users,
+        sessions_by_platform: sessionSnap.by_platform,
         dau:                  live.dau  ?? 0,
         wau:                  live.wau  ?? 0,
         avg_servers_per_user: live.avg_servers_per_user ?? '0.0',
@@ -257,4 +258,10 @@ async function getMetricsHistory(req, res) {
   }
 }
 
-module.exports = { listUsers, getUser, updateUser, deleteUser, getStats, broadcastNotice, getMetrics, getMetricsHistory };
+// GET /api/admin/sessions — snapshot of all currently active WebSocket sessions
+function listActiveSessions(req, res) {
+  const activeSessions = getActiveSessions();
+  return res.json({ sessions: activeSessions, count: activeSessions.length });
+}
+
+module.exports = { listUsers, getUser, updateUser, deleteUser, getStats, broadcastNotice, getMetrics, getMetricsHistory, listActiveSessions };

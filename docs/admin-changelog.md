@@ -5,6 +5,20 @@ Format: `[YYYY-MM-DD HH:MM TZ] — Summary`
 
 ---
 
+## [2026-03-14] — Platform tracking + graceful offline
+
+**Changed — `GET /api/admin/metrics`**
+- `active_connections` now counts live sockets from the in-memory session registry (was `engine.clientsCount`).
+- Added `unique_users_online` — distinct users with at least one open socket.
+- Added `sessions_by_platform` — `{ desktop, web, mobile_web }` breakdown of live sockets.
+
+**Dashboard**
+- Renamed `Live Connections` card → `Live Sockets`.
+- Added `Unique Users Online` metric card.
+- Added `Platform Breakdown` panel (shares column with DB Pool) showing desktop / web / mobile web socket counts.
+
+---
+
 ## [2026-03-07 9:00 PM PST] — Metrics
 
 ### Added

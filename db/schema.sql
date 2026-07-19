@@ -120,3 +120,58 @@ CREATE TABLE IF NOT EXISTS federation_counters (
 INSERT INTO federation_counters (key, value)
   VALUES ('login_success', 0), ('login_fail', 0), ('user_registered', 0)
   ON CONFLICT (key) DO NOTHING;
+
+-- ─── Security hardening (2026-07-19) ─────────────────────────────────────────
+-- Refresh-token rotation, jti revocation, email verification, password reset,
+-- login lockout, and TOTP 2FA.
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Rotating refresh tokens. Only the SHA-256 of the token is stored.
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash   CHAR(64) NOT NULL UNIQUE,           -- sha256 hex
+  expires_at   TIMESTAMPTZ NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  revoked_at   TIMESTAMPTZ,
+  replaced_by  UUID REFERENCES refresh_tokens(id)  -- rotation chain
+);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens (user_id);
+
+-- Immediate revocation of outstanding identity tokens (logout, admin action).
+-- Rows are prunable once expires_at passes.
+CREATE TABLE IF NOT EXISTS revoked_jtis (
+  jti        UUID PRIMARY KEY,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_revoked_jtis_expiry ON revoked_jtis (expires_at);
+
+-- One-time email action tokens (verification, password reset). Hash-only.
+CREATE TABLE IF NOT EXISTS email_tokens (
+  token_hash CHAR(64) PRIMARY KEY,                 -- sha256 hex
+  user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose    VARCHAR(20) NOT NULL CHECK (purpose IN ('verify', 'reset')),
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at    TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_email_tokens_user ON email_tokens (user_id, purpose);
+
+-- Per-account login lockout (backs the per-IP rate limiter).
+CREATE TABLE IF NOT EXISTS auth_failures (
+  email        VARCHAR(255) PRIMARY KEY,
+  fail_count   INTEGER NOT NULL DEFAULT 0,
+  last_fail_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  locked_until TIMESTAMPTZ
+);
+
+-- TOTP 2FA. Secret is base32; backup codes stored as sha256 hashes.
+CREATE TABLE IF NOT EXISTS user_mfa (
+  user_id      UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  secret       VARCHAR(64) NOT NULL,
+  enabled      BOOLEAN NOT NULL DEFAULT FALSE,
+  backup_codes JSONB NOT NULL DEFAULT '[]',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

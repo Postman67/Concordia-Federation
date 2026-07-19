@@ -1,10 +1,11 @@
-const jwt = require('jsonwebtoken');
+const { verifyIdentityToken } = require('../services/tokens');
+const { isJtiRevoked } = require('../services/sessions');
 
 /**
- * Verifies the Bearer JWT and additionally checks that the user is the
- * designated master admin (ADMIN_UUID env var).
+ * Verifies the Bearer identity token and additionally checks that the user
+ * is the designated master admin (ADMIN_UUID env var).
  */
-function requireAdmin(req, res, next) {
+async function requireAdmin(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authentication required.' });
@@ -13,7 +14,10 @@ function requireAdmin(req, res, next) {
   const token = header.slice(7);
   let payload;
   try {
-    payload = jwt.verify(token, process.env.JWT_SECRET);
+    payload = await verifyIdentityToken(token);
+    if (await isJtiRevoked(payload.jti)) {
+      return res.status(401).json({ error: 'Invalid or expired token.' });
+    }
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token.' });
   }
@@ -23,6 +27,7 @@ function requireAdmin(req, res, next) {
   }
 
   req.userId = payload.sub;
+  req.tokenPayload = payload;
   next();
 }
 

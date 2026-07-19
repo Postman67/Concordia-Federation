@@ -78,8 +78,9 @@
  */
 
 const { Server } = require('socket.io');
-const jwt        = require('jsonwebtoken');
 const pool       = require('../config/db');
+const { verifyIdentityToken } = require('../services/tokens');
+const { isJtiRevoked } = require('../services/sessions');
 
 let io = null;
 
@@ -109,9 +110,15 @@ const offlineTimers = new Map();
  * Called once from app.js.
  */
 function init(httpServer) {
+  // Same allowlist as the HTTP layer (CORS_ORIGINS, comma-separated).
+  const corsOrigins = (process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.CORS_ORIGIN || '*',
+      origin: corsOrigins.length > 0 ? corsOrigins : '*',
       methods: ['GET', 'POST'],
     },
     // Keep connection alive — clients should ping every 25 s
@@ -124,13 +131,16 @@ function init(httpServer) {
   //   const socket = io('https://federation.concordiachat.com', {
   //     auth: { token: '<jwt>' }
   //   });
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) {
       return next(new Error('Authentication required.'));
     }
     try {
-      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      const payload = await verifyIdentityToken(token);
+      if (await isJtiRevoked(payload.jti)) {
+        return next(new Error('Invalid or expired token.'));
+      }
       socket.userId = payload.sub;   // UUID string
       next();
     } catch {

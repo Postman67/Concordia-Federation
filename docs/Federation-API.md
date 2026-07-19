@@ -1,6 +1,6 @@
 ﻿# Concordia Federation — API Reference
 
-> Last updated: March 7, 2026 8:15 PM PST
+> Last updated: July 19, 2026
 
 > The Federation is the sole authentication and settings authority for all Concordia clients.
 > Individual servers never receive personal user data — only the user's `id`.
@@ -11,11 +11,43 @@ All request and response bodies are JSON.
 
 ### Authentication
 
-All protected endpoints require a JWT in the `Authorization` header:
+The Federation issues **EdDSA (Ed25519) signed JWTs**. Public verification keys
+are published at `GET /.well-known/jwks.json` — services verify tokens locally;
+there are no shared signing secrets anywhere in the platform.
+
+Two token types exist, distinguished by their `aud` (audience) claim:
+
+| Token | `aud` | Lifetime | Sent to |
+|---|---|---|---|
+| **Identity token** | `concordia:federation`, `concordia:social` | `JWT_EXPIRES_IN` (default `7d`) | Federation + Social only |
+| **Server token** | the chat server's origin, e.g. `https://chat.example.com` | `SERVER_TOKEN_TTL` (default 600 s) | that one chat server only |
+
+All protected Federation endpoints require an **identity token** in the `Authorization` header:
 ```
-Authorization: Bearer <token>
+Authorization: Bearer <identity token>
 ```
-Tokens are issued by `/api/auth/register` and `/api/auth/login`. They expire after the duration set in `JWT_EXPIRES_IN` (default `7d`).
+Identity tokens are issued by `/api/auth/register` and `/api/auth/login`.
+
+> ⚠️ **Never send the identity token to a chat server.** Exchange it for a
+> short-lived server-scoped token via [`POST /api/auth/server-token`](#post-apiauthserver-token)
+> and send only that. Chat servers reject any token whose `aud` is not their own
+> origin, and the Federation and Social reject server-scoped tokens — so a token
+> harvested by a malicious server operator is useless anywhere else and expires
+> within minutes.
+
+### Signing keys
+
+### `GET /.well-known/jwks.json`
+
+Public JWKS document (RFC 7517). Chat servers and Social verify Federation-issued
+tokens against these keys locally (`alg: EdDSA`). Responses are cacheable
+(`Cache-Control: public, max-age=300`); key rotation adds a new `kid` while
+tokens signed by the old key finish expiring.
+
+**Response `200`**
+```json
+{ "keys": [ { "kty": "OKP", "crv": "Ed25519", "x": "…", "kid": "…", "alg": "EdDSA", "use": "sig" } ] }
+```
 
 ### WebSocket Connection
 
@@ -103,6 +135,89 @@ Authenticates an existing user. Returns a JWT.
 **`400`** Validation failed · **`401`** Invalid credentials · **`500`** Server error
 
 > The same `401` message is returned for both unknown email and wrong password to prevent user enumeration.
+
+### `POST /api/auth/server-token`
+
+🔒 Requires identity token.
+
+Exchanges the caller's identity token for a **short-lived token scoped to one
+chat server** (OAuth-style token exchange). The token's `aud` claim is the
+normalized origin of the requested server; the server verifies it locally
+against the Federation JWKS and rejects tokens minted for anyone else.
+
+The token also embeds `preferred_username` and `avatar_url` claims so servers
+can render the member without calling the Federation.
+
+**Request body**
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `server` | string | The server's address (`https://chat.example.com`, bare hosts assume `https`) |
+
+**`200 OK`**
+```json
+{
+  "token": "<server-scoped jwt>",
+  "audience": "https://chat.example.com",
+  "expires_in": 600
+}
+```
+
+**`400`** Invalid server address · **`401`** Missing/invalid identity token · **`500`** Server error
+
+> Clients should cache the token per server and refresh shortly before
+> `expires_in` elapses (the reference client refreshes 60 s early).
+
+### `POST /api/auth/refresh`
+
+Rotating refresh. Body: `{ "refresh_token": "<token>" }` → `200` with a fresh
+`{ token, refresh_token, expires_in }` pair. The presented token is revoked on
+use; **presenting an already-rotated token revokes every refresh token on the
+account** (stolen-token defense) → `401 "Session revoked."`.
+
+### `POST /api/auth/logout`
+
+🔒 Requires identity token. Optional body: `{ "refresh_token": "<token>" }`.
+Blacklists the identity token's `jti` (immediately invalid on every service)
+and revokes the refresh token.
+
+### Email verification
+
+- `POST /api/auth/verify-email/request` 🔒 — sends a one-time 24 h link
+  (page: `/account/verify-email.html`). Rate limit: 5/h per IP.
+- `POST /api/auth/verify-email/confirm` — body `{ token }` → marks the email
+  verified. Links are single-use.
+
+### Password reset
+
+- `POST /api/auth/password-reset/request` — body `{ email }`. **Always `200`**
+  (no user enumeration); if the account exists, a one-time 1 h link is emailed
+  (page: `/account/reset-password.html`). Rate limit: 5/h per IP.
+- `POST /api/auth/password-reset/confirm` — body `{ token, password }`
+  (standard password rules). A successful reset revokes every refresh token on
+  the account.
+
+### TOTP 2FA — `/api/auth/mfa`
+
+- `POST /setup` 🔒 → `{ secret, otpauth_uri }` (RFC 6238, SHA-1/6-digit/30 s —
+  works with any authenticator app). Inactive until confirmed.
+- `POST /enable` 🔒 — body `{ code }` (live TOTP) → enables 2FA, returns
+  `{ backup_codes: [8 single-use codes] }` **exactly once**.
+- `POST /disable` 🔒 — body `{ code }` (TOTP or backup code).
+- `POST /verify` — body `{ mfa_token, code }`. Completes a login that returned
+  `{ mfa_required: true, mfa_token }`. The `mfa_token` lives 5 minutes and is
+  single-use; backup codes are consumed on use.
+
+> With 2FA enabled, `POST /api/auth/login` returns
+> `{ "mfa_required": true, "mfa_token": "<jwt>" }` and **no session tokens**.
+
+### Rate limits & lockout
+
+Credential endpoints (login, register, refresh, confirms, mfa/verify):
+**10 requests / 15 min / IP**. Email-sending endpoints: **5 / h / IP**.
+Server-token exchange: **60 / min / IP**. Global API: 300 / 15 min / IP.
+Additionally, **5 failed logins within 15 minutes lock the account for
+15 minutes** (`429`, even for the correct password).
 
 ---
 
